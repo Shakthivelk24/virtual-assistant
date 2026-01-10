@@ -10,7 +10,7 @@ function SignUp() {
    const [email,setEmail] = useState("");
    const [password,setPassword] = useState("");
    const [error,setError] = useState("");
-   const {serverUrl} = useContext(userDataContext);
+   const {serverUrl,userData, setUserData} = useContext(userDataContext);
    const [loading,setLoading] = useState(false);
    console.log("Server URL from context:", serverUrl);
    const handleSignUp = async(e)=>{
@@ -24,9 +24,11 @@ function SignUp() {
                 email,
                 password
             },{withCredentials:true});
-            console.log(result);
+            setUserData(result.data);
             setLoading(false);
+            navigate("/customize");
          }catch(err){   
+            setUserData(null);
             console.log("Error during sign up:", err.message);
             setError(err.response?.data?.message || "An error occurred");
             setLoading(false);

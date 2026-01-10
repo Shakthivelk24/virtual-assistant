@@ -11,7 +11,7 @@ function SignIn() {
    const [password,setPassword] = useState("");
    const [error,setError] = useState("");
    const [loading,setLoading] = useState(false);
-   const {serverUrl} = useContext(userDataContext);
+   const {serverUrl,userData, setUserData} = useContext(userDataContext);
    const handleSignUp = async(e)=>{
         e.preventDefault();
         setLoading(true);
@@ -21,9 +21,11 @@ function SignIn() {
                 email,
                 password
             },{withCredentials:true});
-            console.log(result);
+            setUserData(result.data);
             setLoading(false);
+             navigate("/");
          }catch(err){   
+            setUserData(null);
             console.log("Error during sign in:", err.message);
             setError(err.response?.data?.message || "An error occurred");
             setLoading(false);
