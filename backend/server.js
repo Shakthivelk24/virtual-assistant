@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routers/auth.routes.js";
+import userRoutes from "./routers/user.routes.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 
@@ -21,6 +22,7 @@ app.use(cors({
 const port = process.env.PORT || 5000;
 
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 
 app.listen(port, () => {
   console.log(`Server is running on port http://localhost:${port}`);
