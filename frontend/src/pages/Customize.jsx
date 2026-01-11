@@ -10,6 +10,7 @@ import image7 from "../assets/image7.avif";
 import { LuImageUp } from "react-icons/lu";
 import { userDataContext } from "../context/UserContext.jsx";
 import { useNavigate } from "react-router-dom";
+import { MdArrowBack } from "react-icons/md";
 
 function Customize() {
   const {
@@ -31,7 +32,8 @@ function Customize() {
     setFrontendImage(URL.createObjectURL(file));
   };
   return (
-    <div className="w-full h-[100vh] bg-gradient-to-t from-[black] to-[#010140] flex flex-col justify-center items-center overflow-y-scroll">
+    <div className="w-full h-[100vh] bg-gradient-to-t from-[black] to-[#010140] flex flex-col justify-center items-center overflow-y-scroll relative p-4">
+      <MdArrowBack className='absolute top-[30px] left-[30px] text-white w-[25px] h-[25px] cursor-pointer' onClick={() => navigate("/")} />
       <h1 className="text-white text-[30px] font-semibold mb-[20px]">
         Select your <span className="text-blue-500">Assistant Image</span>
       </h1>
