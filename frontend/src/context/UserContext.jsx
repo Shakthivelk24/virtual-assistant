@@ -21,11 +21,19 @@ function UserContext({ children }) {
       console.error("Error fetching current user data:", error);
     }
   };
+  const getGeminiResponse = async (prompt) => {
+    try {
+      const result = await axios.post(`${serverUrl}/api/user/ask`, { command: prompt }, {withCredentials:true});
+      return result.data;
+    } catch (error) {
+      console.log("Error in getting Gemini response:", error);
+    }
+  }
   useEffect(() => {
     handleCurrentUser();
   }, []);
   const value = {
-    serverUrl,userData, setUserData,frontendImage,setFrontendImage,backendImage,setBackendImage,selectedImage,setSelectedImage
+    serverUrl,userData, setUserData,frontendImage,setFrontendImage,backendImage,setBackendImage,selectedImage,setSelectedImage,getGeminiResponse
   };
   return (
     <div>
