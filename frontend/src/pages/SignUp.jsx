@@ -3,6 +3,7 @@ import auth from "../assets/auth.jpg";
 import { useNavigate } from "react-router-dom";
 import { userDataContext } from "../context/userContext.jsx";
 import axios from "axios";
+import toast from "react-hot-toast";
 
 function SignUp() {
    const navigate= useNavigate();
@@ -25,10 +26,12 @@ function SignUp() {
                 password
             },{withCredentials:true});
             setUserData(result.data);
+            toast.success("Signed Up Successfully");
             setLoading(false);
             navigate("/customize");
          }catch(err){   
             setUserData(null);
+            toast.error("Sign Up Failed");
             console.log("Error during sign up:", err.message);
             setError(err.response?.data?.message || "An error occurred");
             setLoading(false);
