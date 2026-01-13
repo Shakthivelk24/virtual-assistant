@@ -36,12 +36,14 @@ function Home() {
     }
   };
   const startRecognition = () => {
-    try {
-      recognitionRef.current?.start();
-      setListening(true);
-    } catch (error) {
-      if (!error.message.includes("start")) {
-        console.error("Recognition error:", error);
+    if (!isSpeakingRef.current && !isRecognizingRef.current) {
+      try {
+        recognitionRef.current?.start();
+        setListening(true);
+      } catch (error) {
+        if (!error.message.includes("start")) {
+          console.error("Recognition error:", error);
+        }
       }
     }
   };
@@ -65,8 +67,11 @@ function Home() {
     utterance.onend = () => {
       setAICommand("");
       isSpeakingRef.current = false;
-      startRecognition();
+      setTimeout(() => {
+        startRecognition();
+      }, 800);
     };
+    synth.cancel();
     synth.speak(utterance);
   };
 
@@ -105,21 +110,24 @@ function Home() {
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.lang = "en-US";
+    recognition.interimResults = false;
 
     recognitionRef.current = recognition;
+    let isMounted = true;
 
-    const safeRecognition = () => {
-      if (!isSpeakingRef.current && !isRecognizingRef.current) {
-        try {
-          recognition.start();
-          console.log("Speech recognition started");
-        } catch (error) {
-          if (error.name !== "InvalidStateError") {
-            console.log("Error starting speech recognition:", error);
+    const startTimeout = () =>
+      setTimeout(() => {
+        if (isMounted && !isSpeakingRef.current && !isRecognizingRef.current) {
+          try {
+            recognition.start();
+            console.log("Speech recognition started after timeout");
+          } catch (error) {
+            if (error.name !== "InvalidStateError") {
+              console.log("Error starting speech recognition:", error);
+            }
           }
         }
-      }
-    };
+      }, 1000);
 
     recognition.onstart = () => {
       console.log("Recognition started");
@@ -131,10 +139,18 @@ function Home() {
       console.log("Recognition ended");
       isRecognizingRef.current = false;
       setListening(false);
-
-      if (!isSpeakingRef.current) {
+      if (isMounted && !isSpeakingRef.current) {
         setTimeout(() => {
-          safeRecognition();
+          if (isMounted) {
+            try {
+              recognition.start();
+              console.log("Speech recognition restarted after end");
+            } catch (error) {
+              if (error.name !== "InvalidStateError") {
+                console.log("Error restarting speech recognition:", error);
+              }
+            }
+          }
         }, 1000);
       }
     };
@@ -142,9 +158,18 @@ function Home() {
       console.warn("Recognition error:", event.error);
       isRecognizingRef.current = false;
       setListening(false);
-      if (event.error !== "aborted" && !isSpeakingRef.current) {
+      if (event.error !== "aborted" && isMounted && !isSpeakingRef.current) {
         setTimeout(() => {
-          safeRecognition();
+          if (isMounted) {
+            try {
+              recognition.start();
+              console.log("Speech recognition restarted after error");
+            } catch (error) {
+              if (error.name !== "InvalidStateError") {
+                console.log("Error restarting speech recognition:", error);
+              }
+            }
+          }
         }, 1000);
       }
     };
@@ -174,12 +199,26 @@ function Home() {
     };
     const fallback = setInterval(() => {
       if (!isSpeakingRef.current && !isRecognizingRef.current) {
-        safeRecognition();
+        startTimeout();
       }
     }, 10000);
-    safeRecognition();
+    startTimeout();
+
+    window.speechSynthesis.onvoiceschanged = () => {
+      const greeting = new SpeechSynthesisUtterance(
+        `Hello ${userData.assistantName} is online now. How can I assist you today?`
+      );
+      greeting.lang = "ta-IN";
+      greeting.onend = () => {
+        startTimeout();
+      };
+      synth.speak(greeting);
+    };
+
     return () => {
       recognition.stop();
+      isMounted = false;
+      clearTimeout(startTimeout);
       setListening(false);
       isRecognizingRef.current = false;
       clearInterval(fallback);
