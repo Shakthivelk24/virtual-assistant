@@ -212,7 +212,9 @@ function Home() {
       greeting.onend = () => {
         startTimeout();
       };
+      setAICommand(`Hello ${userData.assistantName} is online now. How can I assist you today?`);
       synth.speak(greeting);
+      setAICommand("");
     };
 
     return () => {
