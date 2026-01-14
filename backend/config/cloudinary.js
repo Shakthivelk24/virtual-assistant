@@ -1,8 +1,5 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 // Cloudinary configuration (run once)
 cloudinary.config({
@@ -10,10 +7,12 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-
+// Function to upload file to Cloudinary
 const uploadOnCloudinary = async (localFilePath) => {
   try {
-    if (!localFilePath) return null;
+    if (!localFilePath) return null; // Return null if no file path provided
+
+    // Upload file to Cloudinary
 
     const uploadResult = await cloudinary.uploader.upload(localFilePath, {
       resource_type: "image",

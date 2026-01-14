@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-
+// Function to generate JWT token
 const generateToken = async(userId) => {
     try{
         const token = await  jwt.sign(
