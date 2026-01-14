@@ -13,8 +13,8 @@ connectDB();
 
 const app = express();
 
-app.use(express.json());
-app.use(cookieParser());
+app.use(express.json()); // Middleware to parse JSON request bodies
+app.use(cookieParser()); // Middleware to parse cookies
 app.use(cors({
   origin: "http://localhost:5173",
   credentials: true,
@@ -22,8 +22,8 @@ app.use(cors({
 
 const port = process.env.PORT || 5000;
 
-app.use("/api/auth", authRoutes);
-app.use("/api/user", userRoutes);
+app.use("/api/auth", authRoutes); // Authentication routes
+app.use("/api/user", userRoutes); // User-related routes
 
 
 app.listen(port, () => {

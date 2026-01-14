@@ -1,11 +1,10 @@
 
-import axios from "axios";
+import axios from "axios"; // HTTP client for making API requests
 
-
-
-const geminiResonse = async (prompt, assistantName, userName) => {
+const geminiResonse = async (prompt, assistantName, userName) => { // Function to get response from Gemini API
   try {
-    const apiUrl = process.env.GEMINI_API_URL;
+    const apiUrl = process.env.GEMINI_API_URL;// Gemini API endpoint from environment variables
+    // System prompt template for guiding the assistant's behavior
     const systemPrompt = `You are a virtual assistant named ${assistantName} created by ${userName}.
 You are not Google. You will now behave like a voice-enabled assistant.
 Your task is to understand the user's natural language input and respond with a JSON object like this:
@@ -56,19 +55,19 @@ Important:
 
 Now your userInput: ${prompt}
 `;
-
+    // Making POST request to Gemini API with the system prompt
     const result = await axios.post(apiUrl, {
       contents: [
         {
           parts: [
             {
-              text: systemPrompt,
+              text: systemPrompt, // The constructed system prompt
             },
           ],
         },
       ],
     });
-    return result.data.candidates[0].content.parts[0].text;
+    return result.data.candidates[0].content.parts[0].text; // Return the assistant's response text
   } catch (error) {
     console.log("Error in Gemini API call:", error);
   }
