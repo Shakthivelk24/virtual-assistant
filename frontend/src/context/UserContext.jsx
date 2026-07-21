@@ -2,6 +2,7 @@
 import React, { createContext, useState } from "react"; // Import necessary React functions
 import axios from "axios"; // Import axios for HTTP requests
 import { useEffect } from "react"; // Import useEffect for side effects
+import Loading from "../components/Loading.jsx"; // Import Loading component for displaying loading state
 
 // Create a context for user data
 export const userDataContext = createContext();
@@ -12,7 +13,7 @@ function UserContext({ children }) { // Define the UserContext component
   const [frontendImage, setFrontendImage] = useState(null); // State for storing frontend image
   const [backendImage, setBackendImage] = useState(null); // State for storing backend image
   const [selectedImage, setSelectedImage] = useState(null); // State for storing selected image
-
+  const [loading, setLoading] = useState(false); // State for loading status
   // Function to fetch current user data from the server
 
   const handleCurrentUser = async () => {
@@ -22,8 +23,10 @@ function UserContext({ children }) { // Define the UserContext component
       });
       setUserData(result.data);
       console.log("Current User Data:", result.data);
+      setLoading(false);
     } catch (error) {
       console.error("Error fetching current user data:", error);
+      setLoading(false);
     }
   };
   // Function to get response from Gemini API
@@ -34,6 +37,9 @@ function UserContext({ children }) { // Define the UserContext component
     } catch (error) {
       console.log("Error in getting Gemini response:", error);
     }
+  }
+  if(loading){
+    return <Loading />;
   }
   // useEffect to fetch current user data on component mount
   useEffect(() => {
