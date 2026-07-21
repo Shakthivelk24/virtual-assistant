@@ -1,6 +1,7 @@
 
 import axios from "axios"; // HTTP client for making API requests
 
+console.log("Gemini API URL:", process.env.GEMINI_API_URL); // Log the Gemini API URL for debugging
 const geminiResonse = async (prompt, assistantName, userName) => { // Function to get response from Gemini API
   try {
     const apiUrl = process.env.GEMINI_API_URL;// Gemini API endpoint from environment variables
@@ -70,7 +71,8 @@ Now your userInput: ${prompt}
     });
     return result.data.candidates[0].content.parts[0].text; // Return the assistant's response text
   } catch (error) {
-    console.log("Error in Gemini API call:", error);
+    console.log("Status:", error.response?.status);
+    console.log("Data:", JSON.stringify(error.response?.data, null, 2));
   }
 };
 
