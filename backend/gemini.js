@@ -1,7 +1,6 @@
 
 import axios from "axios"; // HTTP client for making API requests
 
-console.log("Gemini API URL:", process.env.GEMINI_API_URL); // Log the Gemini API URL for debugging
 const geminiResonse = async (prompt, assistantName, userName) => { // Function to get response from Gemini API
   try {
     const apiUrl = process.env.GEMINI_API_URL;// Gemini API endpoint from environment variables
