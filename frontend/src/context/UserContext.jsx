@@ -13,22 +13,30 @@ function UserContext({ children }) { // Define the UserContext component
   const [frontendImage, setFrontendImage] = useState(null); // State for storing frontend image
   const [backendImage, setBackendImage] = useState(null); // State for storing backend image
   const [selectedImage, setSelectedImage] = useState(null); // State for storing selected image
-  const [loading, setLoading] = useState(false); // State for loading status
+  const [loading, setLoading] = useState(true); // State for loading status
   // Function to fetch current user data from the server
 
   const handleCurrentUser = async () => {
-    try {
-      const result = await axios.get(`${serverUrl}/api/user/current`, {
-        withCredentials: true,
-      });
-      setUserData(result.data);
-      console.log("Current User Data:", result.data);
-      setLoading(false);
-    } catch (error) {
-      console.error("Error fetching current user data:", error);
-      setLoading(false);
+  setLoading(true);
+
+  try {
+    const result = await axios.get(
+      `${serverUrl}/api/user/current`,
+      { withCredentials: true }
+    );
+
+    setUserData(result.data);
+  } catch (error) {
+    if (error.response?.status === 401) {
+      // User is not logged in
+      setUserData(null);
+    } else {
+      console.error(error);
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
   // Function to get response from Gemini API
   const getGeminiResponse = async (prompt) => {
     try {
@@ -38,16 +46,14 @@ function UserContext({ children }) { // Define the UserContext component
       console.log("Error in getting Gemini response:", error);
     }
   }
-  if(loading){
-    return <Loading />;
-  }
+  
   // useEffect to fetch current user data on component mount
   useEffect(() => {
     handleCurrentUser();
   }, []);
   // Define the value to be provided by the context
   const value = {
-    serverUrl,userData, setUserData,frontendImage,setFrontendImage,backendImage,setBackendImage,selectedImage,setSelectedImage,getGeminiResponse
+    serverUrl,userData, setUserData,frontendImage,setFrontendImage,backendImage,setBackendImage,selectedImage,setSelectedImage,getGeminiResponse,loading,setLoading
   };
   return (
     <div>
