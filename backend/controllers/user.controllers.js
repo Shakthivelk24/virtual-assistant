@@ -47,70 +47,82 @@ export const updateAssistant = async (req, res) => {
 // Ask to Assistant Controller
 export const askToAssistant = async (req, res) => {
   try {
-    const { command } = req.body; // Destructure command from request body
-    const user = await User.findById(req.userId); // Find user by ID
-    user.history.push(command); // Add command to user's history
-    await user.save(); // Save updated user document
-    const userName = user.name; // Get user's name
-    const assistantName = user.assistantName; // Get assistant's name
-    const result = await geminiResonse(command, assistantName, userName); // Get response from Gemini AI
-    // Extract JSON part from the response
-    const jsonMatch = result.match(/{[\s\S]*}/);
-    // Handle case where JSON is not found in the response
-    if (!jsonMatch) {
-      return res
-        .status(500)
-        .json({ message: "Invalid response from assistant" });
+    const { command } = req.body;
+
+    // Find user
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
     }
-    // Parse the JSON response
-    const jsonResponse = JSON.parse(jsonMatch[0]);
-    // Determine response type and send appropriate response
-    const type = jsonResponse.type;
-    // Handle different response types
-    switch (type) {
+
+    // Save command history
+    user.history.push(command);
+    await user.save();
+
+    const userName = user.name;
+    const assistantName = user.assistantName;
+
+    // Get Gemini response
+    const result = await geminiResonse(
+      command,
+      assistantName,
+      userName
+    );
+
+    console.log("Gemini Response:", result);
+
+    // If geminiResponse() already returns an object
+    let jsonResponse;
+
+    if (typeof result === "string") {
+      const jsonMatch = result.match(/{[\s\S]*}/);
+
+      if (!jsonMatch) {
+        return res.status(500).json({
+          message: "Invalid JSON received from Gemini",
+        });
+      }
+
+      jsonResponse = JSON.parse(jsonMatch[0]);
+    } else {
+      jsonResponse = result;
+    }
+
+    // Handle dynamic values
+    switch (jsonResponse.type) {
       case "get_date":
-        return res.json({
-          type: "get_date",
-          userInput: jsonResponse.userInput,
-          response: `Today is ${moment().format("MMMM Do YYYY")}`,
-        });
+        jsonResponse.response = `Today is ${moment().format("MMMM Do YYYY")}`;
+        break;
+
       case "get_time":
-        return res.json({
-          type: "get_time",
-          userInput: jsonResponse.userInput,
-          response: `The current time is ${moment().format("h:mm A")}`,
-        });
+        jsonResponse.response = `The current time is ${moment().format(
+          "h:mm A"
+        )}`;
+        break;
+
       case "get_day":
-        return res.json({
-          type: "get_day",
-          userInput: jsonResponse.userInput,
-          response: `Today is ${moment().format("dddd")}`,
-        });
+        jsonResponse.response = `Today is ${moment().format("dddd")}`;
+        break;
+
       case "get_month":
-        return res.json({
-          type: "get_month",
-          userInput: jsonResponse.userInput,
-          response: `This month is ${moment().format("MMMM")}`,
-        });
-      case "general":
-      case "google_search":
-      case "youtube_search":
-      case "youtube_play":
-      case "calculator_open":
-      case "instagram_open":
-      case "facebook_open":
-      case "weather-show":
-        return res.json({
-          type: type,
-          userInput: jsonResponse.userInput,
-          response: jsonResponse.response,
-        });
+        jsonResponse.response = `This month is ${moment().format("MMMM")}`;
+        break;
+
       default:
-        return res
-          .status(500)
-          .json({ message: "Unknown response type from assistant" });
+        // Leave response unchanged
+        break;
     }
+
+    return res.status(200).json(jsonResponse);
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Ask Assistant Error:", error);
+
+    return res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
