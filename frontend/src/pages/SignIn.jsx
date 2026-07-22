@@ -23,9 +23,12 @@ function SignIn() {
           email,
           password,
         },
-        { withCredentials: true }
+        { withCredentials: true },
       );
-      setUserData(result.data);
+      const user = await axios.get(`${serverUrl}/api/user/current`, {
+        withCredentials: true,
+      });
+      setUserData(user.data);
       toast.success("Signed In Successfully");
       setLoading(false);
       navigate("/");
