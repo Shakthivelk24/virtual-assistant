@@ -2,15 +2,27 @@ import User from "../models/user.models.js";
 import uploadOnCloudinary from "../config/cloudinary.js";
 import geminiResonse from "../gemini.js";
 import moment from "moment";
+import {
+  recordDatabaseQuery,
+  assistantRequestsQuery,
+  cloudinaryUploadsQuery,
+} from "../metrics/dbMetrics.js";
+import {
+  recordSuccessfulLogin,
+  recordFailedLogin,
+} from "../metrics/authMetrics.js";
 
 // Get Current User Controller
 export const getCurrentUser = async (req, res) => {
   try {
+    recordDatabaseQuery.inc();
     const userId = req.userId; // Assuming userId is set in req by authentication middleware
     const user = await User.findById(userId).select("-password"); // Exclude password field
     if (!user) {
+      recordFailedLogin(); // Record failed login attempt
       return res.status(404).json({ message: "User not found" }); // Handle user not found
     }
+    recordSuccessfulLogin(); // Record successful login attempt
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ message: "Server error" });
@@ -24,6 +36,7 @@ export const updateAssistant = async (req, res) => {
     let assistantImage = imageUrl; // Default to provided imageUrl
     // If a file is uploaded, upload it to Cloudinary
     if (req.file) {
+      cloudinaryUploadsCounter.inc();
       const result = await uploadOnCloudinary(req.file.path); // Upload file to Cloudinary
       assistantImage = result.secure_url; // Get the secure URL of the uploaded image
     }
@@ -47,6 +60,7 @@ export const updateAssistant = async (req, res) => {
 // Ask to Assistant Controller
 export const askToAssistant = async (req, res) => {
   try {
+    assistantRequestsCounter.inc();
     const { command } = req.body;
 
     // Find user

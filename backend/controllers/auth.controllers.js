@@ -1,12 +1,20 @@
 import bcrypt from "bcryptjs";
 import User from "../models/user.models.js";
 import token from "../config/token.js";
+import {
+  recordSuccessfulLogin,
+  recordFailedLogin,
+  recordUserRegistration,
+  recordUserLogout,
+} from "../metrics/authMetrics.js";
+import { recordDatabaseQuery } from "../metrics/dbMetrics.js";
 
 // User Registration Controller
 export const signUp = async (req, res) => {
   try {
     const { name, email, password } = req.body; // Destructure user details from request body
-
+    // Database Query
+    recordDatabaseQuery();
     const existingUser = await User.findOne({ email });// Check if user already exists
     if (existingUser) { // If user exists, return error
       return res.status(400).json({ message: "User already exists" });
@@ -28,6 +36,8 @@ export const signUp = async (req, res) => {
     });
     // Save the new user to the database
     await newUser.save();
+    // Database Query
+    recordDatabaseQuery();
     // Generate authentication token
     const authToken = await token(newUser._id);
     // Set the token in an HTTP-only cookie
@@ -37,7 +47,8 @@ export const signUp = async (req, res) => {
       sameSite: "strict", // CSRF protection
       secure: false, // Set to true in production with HTTPS
     });
-
+    // Prometheus Metric
+    recordUserRegistration();
     res.status(201).json({ message: "Signup success" }); // Respond with success message
   } catch (error) {
     res.status(500).json({ message: "Server issue" }); // Handle server errors
@@ -47,10 +58,12 @@ export const signUp = async (req, res) => {
 export const signIn = async (req, res) => {
   try {
     const { email, password } = req.body; // Destructure login credentials from request body
-
+    // Database Query
+    recordDatabaseQuery();
     const existingUser = await User.findOne({ email }); // Check if user exists
     // If user does not exist, return error
     if (!existingUser) {
+      recordFailedLogin();
       return res.status(400).json({ message: "User not found" });
     }
     // Compare provided password with stored hashed password
@@ -58,6 +71,7 @@ export const signIn = async (req, res) => {
     // If passwords do not match, return error
     if (!match) {
       return res.status(400).json({ message: "Wrong credentials" });
+      recordFailedLogin();
     }
     // Generate authentication token
     const authToken = await token(existingUser._id);
@@ -68,9 +82,12 @@ export const signIn = async (req, res) => {
       sameSite: "strict",
       secure: false,
     });
+    // Prometheus Metric
+    recordSuccessfulLogin();
     // Respond with success message
     res.status(200).json({ message: "Signin success" });
   } catch (error) {
+    recordFailedLogin();
     res.status(500).json({ message: "Server issue" });// Handle server errors
   }
 };
@@ -78,6 +95,8 @@ export const signIn = async (req, res) => {
 export const signOut = async (req, res) => {
   try {
     res.clearCookie("token"); // Clear the authentication token cookie
+    // Prometheus Metric
+    recordUserLogout();
     res.status(200).json({ message: "Logout success" }); // Respond with success message
   } catch (error) {
     res.status(500).json({ message: "Server issue" });  // Handle server errors
