@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  backend:
+    container_name: backend
+
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+
+    image: shakthivelk24/virtualassisstant-backend:latest
+
+    ports:
+      - "5000:5000"
+
+    env_file:
+      - ./server/.env
+
+    restart: unless-stopped
+
+    networks:
+      - virtualassisstant-network
+
+  frontend:
+    container_name: frontend
+
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      args:
+        VITE_API_URL: /api
+
+    image: shakthivelk24/virtualassisstant-frontend:latest
+
+    ports:
+      - "3000:80"
+
+    depends_on:
+      - backend
+
+    restart: unless-stopped
+
+    networks:
+      - virtualassisstant-network
+
+networks:
+  virtualassisstant-network:
+    driver: bridge
