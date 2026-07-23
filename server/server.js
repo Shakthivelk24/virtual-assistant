@@ -38,6 +38,16 @@ app.get("/metrics", async (req, res) => {
   res.end(await register.metrics());
 });
 
+// ============================================================
+// Health Check
+// ============================================================
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "UP",
+    service: "backend",
+  });
+});
+
 
 app.use("/api/auth", authRoutes); // Authentication routes
 app.use("/api/user", userRoutes); // User-related routes
