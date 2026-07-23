@@ -8,7 +8,7 @@ import Loading from "../components/Loading.jsx"; // Import Loading component for
 export const userDataContext = createContext();
 
 function UserContext({ children }) { // Define the UserContext component
-  const serverUrl = "http://localhost:8000"; // Define the server URL
+  const serverUrl = import.meta.env.VITE_BACKEND_URL; // Define the server URL
   const [userData, setUserData] = React.useState(null); // State for storing user data
   const [frontendImage, setFrontendImage] = useState(null); // State for storing frontend image
   const [backendImage, setBackendImage] = useState(null); // State for storing backend image
