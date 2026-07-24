@@ -15,7 +15,7 @@ import {
 // Get Current User Controller
 export const getCurrentUser = async (req, res) => {
   try {
-    recordDatabaseQuery.inc();
+    recordDatabaseQuery();
     const userId = req.userId; // Assuming userId is set in req by authentication middleware
     const user = await User.findById(userId).select("-password"); // Exclude password field
     if (!user) {
@@ -25,7 +25,10 @@ export const getCurrentUser = async (req, res) => {
     recordSuccessfulLogin(); // Record successful login attempt
     res.status(200).json(user);
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("getCurrentUser Error:", error);
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
@@ -36,7 +39,7 @@ export const updateAssistant = async (req, res) => {
     let assistantImage = imageUrl; // Default to provided imageUrl
     // If a file is uploaded, upload it to Cloudinary
     if (req.file) {
-      cloudinaryUploadsCounter.inc();
+      cloudinaryUploadsQuery();
       const result = await uploadOnCloudinary(req.file.path); // Upload file to Cloudinary
       assistantImage = result.secure_url; // Get the secure URL of the uploaded image
     }
@@ -44,7 +47,7 @@ export const updateAssistant = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       req.userId,
       { assistantName, assistantImage },
-      { new: true }
+      { new: true },
     ).select("-password");
     // Handle case where user is not found
     if (!updatedUser) {
@@ -60,7 +63,7 @@ export const updateAssistant = async (req, res) => {
 // Ask to Assistant Controller
 export const askToAssistant = async (req, res) => {
   try {
-    assistantRequestsCounter.inc();
+    assistantRequestsQuery();
     const { command } = req.body;
 
     // Find user
@@ -80,11 +83,7 @@ export const askToAssistant = async (req, res) => {
     const assistantName = user.assistantName;
 
     // Get Gemini response
-    const result = await geminiResonse(
-      command,
-      assistantName,
-      userName
-    );
+    const result = await geminiResonse(command, assistantName, userName);
 
     console.log("Gemini Response:", result);
 
@@ -113,7 +112,7 @@ export const askToAssistant = async (req, res) => {
 
       case "get_time":
         jsonResponse.response = `The current time is ${moment().format(
-          "h:mm A"
+          "h:mm A",
         )}`;
         break;
 
