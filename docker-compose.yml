@@ -1,14 +1,7 @@
-version: "3.9"
-
 services:
   backend:
     container_name: backend
-
-    build:
-      context: .
-      dockerfile: docker/backend/Dockerfile
-
-    image: shakthivelk24/virtualassisstant-backend:latest
+    image: shakthivelk24/virtualassisstant-backend:${IMAGE_TAG}
 
     ports:
       - "5000:5000"
@@ -23,14 +16,7 @@ services:
 
   frontend:
     container_name: frontend
-
-    build:
-      context: .
-      dockerfile: docker/frontend/Dockerfile
-      args:
-        VITE_API_URL: /api
-
-    image: shakthivelk24/virtualassisstant-frontend:latest
+    image: shakthivelk24/virtualassisstant-frontend:${IMAGE_TAG}
 
     ports:
       - "3000:80"
