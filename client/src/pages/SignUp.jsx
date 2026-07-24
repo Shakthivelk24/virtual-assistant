@@ -1,7 +1,7 @@
 import React, { useContext, useState } from "react";
 import auth from "../assets/auth.jpg";
 import { useNavigate } from "react-router-dom";
-import { userDataContext } from "../context/userContext.jsx";
+import { userDataContext } from "../context/UserContext.jsx";
 import axios from "axios";
 import toast from "react-hot-toast";
 
