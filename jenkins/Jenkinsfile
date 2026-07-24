@@ -1,0 +1,171 @@
+@Library('Shared')_
+
+pipeline {
+    agent {
+        label 'shakthiAgent'
+    }
+    environment {
+        // Application
+        APP_NAME = 'request-system'
+        APP_VERSION = "1.0.${BUILD_NUMBER}"
+
+        // Docker Images
+        DOCKER_USERNAME = 'shakthivelk24'
+
+        FRONTEND_IMAGE = "${DOCKER_USERNAME}/virtual-assistant-frontend"
+        BACKEND_IMAGE = "${DOCKER_USERNAME}/virtual-assistant-backend"
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
+
+        // SonarQube
+        SONAR_PROJECT_KEY = 'Virtual Assistant'
+
+        // // Reports
+        TRIVY_REPORT_DIR = 'reports/trivy'
+    }
+    options {
+        // Add timestamps to all log lines for debugging
+        timestamps()
+
+        // Color ANSI codes in console output
+        ansiColor('xterm')
+
+        // Timeout the entire pipeline after 60 minutes
+        // Prevents hung builds from consuming resources indefinitely
+        timeout(time: 60, unit: 'MINUTES')
+
+        // Keep only last 10 builds to save disk space
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+
+        // Prevent multiple builds of the same branch running simultaneously
+        disableConcurrentBuilds()
+    }
+    stages {
+        // ====================================================
+        // STAGE 1: CHECK TOOLS
+        // ====================================================
+        stage('Check Tools') {
+            steps {
+                cleanWs()
+                customLog('Checking required tools...')
+                if(isUnix()) {
+                    sh '''
+                    echo "========== Node Version =========="
+                    node -v
+
+                    echo "========== NPM Version =========="
+                    npm -v
+
+                    echo "========== Docker Version =========="
+                    docker --version
+
+                    echo "========== Trivy Version =========="
+                    trivy --version
+                '''
+                } else {
+                    bat '''
+                    echo "========== Node Version =========="
+                    node -v
+
+                    echo "========== NPM Version =========="
+                    npm -v
+
+                    echo "========== Docker Version =========="
+                    docker --version
+
+                    echo "========== Trivy Version =========="
+                    trivy --version
+                '''
+                }
+            }
+        }
+        // ====================================================
+        // STAGE 2: CHECKOUT SOURCE CODE
+        // ====================================================
+        stage('🔄 Checkout') {
+            steps {
+                customLog('Checking out source code')
+
+                checkout scm
+
+                sh '''
+                echo "========== Last 5 Commits =========="
+                git log --oneline -5
+
+                echo "========== Git Status =========="
+                git status
+            '''
+            }
+        }
+        // ====================================================
+        // STAGE 3: INSTALL DEPENDENCIES
+        // ====================================================
+        stage('📦 Install Dependencies') {
+            parallel {
+                stage('Frontend Dependencies') {
+                    steps {
+                        customLog('Installing frontend dependencies...')
+                        npmInstall('client')
+                    }
+                }
+
+                stage('Backend Dependencies') {
+                    steps {
+                        customLog('Installing backend dependencies...')
+                        npmInstall('server')
+                    }
+                }
+            }
+        }
+        // ====================================================
+        // STAGE 4: STATIC CODE ANALYSIS
+        // Run SonarQube analysis on the codebase
+        // ====================================================
+        stage('🔍 Static Code Analysis') {
+            steps {
+                customLog('Running SonarQube analysis...')
+                sonarqubeScan(
+                    scannerName: 'SonarScanner',
+                    sonarServer: 'SonarQube',
+                    projectKey: "$SONAR_PROJECT_KEY",
+                    projectName: "$APP_NAME",
+                    projectVersion: "$APP_VERSION",
+                    sources: 'client/src,server',
+                    exclusions: '**/node_modules/**,**/dist/**,**/coverage/**'
+                )
+                customLog('SonarQube analysis submitted')
+            }
+        }
+        // ====================================================
+        // STAGE 5: QUALITY GATE
+        // Wait for SonarQube quality gate result
+        // ====================================================
+        stage('✅ Quality Gate') {
+            steps {
+                customLog('Waiting for SonarQube quality gate result...')
+                qualityGate()
+            }
+        }
+        // ====================================================
+        // STAGE 6: BUILD APPLICATION
+        // Compile React frontend for production
+        // ====================================================
+        stage('🏗️ Build Application') {
+            parallel {
+                stage('Build Frontend') {
+                    steps {
+                        customLog('Building frontend...')
+                        frontendBuild('client')
+                    }
+                }
+
+                stage('Validate Backend') {
+                    steps {
+                        customLog('Validating backend...')
+                        backendValidate('server')
+                    }
+                }
+            }
+        }
+    }    
+}
