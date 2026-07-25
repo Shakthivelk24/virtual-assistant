@@ -48,34 +48,27 @@ pipeline {
             steps {
                 cleanWs()
                 customLog('Checking required tools...')
-                if(isUnix()) {
-                    sh '''
-                    echo "========== Node Version =========="
-                    node -v
 
-                    echo "========== NPM Version =========="
-                    npm -v
+                script {
+                    def cmd = '''
+                      echo "========== Node Version =========="
+                      node -v
 
-                    echo "========== Docker Version =========="
-                    docker --version
+                      echo "========== NPM Version =========="
+                      npm -v
 
-                    echo "========== Trivy Version =========="
-                    trivy --version
-                '''
-                } else {
-                    bat '''
-                    echo "========== Node Version =========="
-                    node -v
+                      echo "========== Docker Version =========="
+                      docker --version
 
-                    echo "========== NPM Version =========="
-                    npm -v
+                      echo "========== Trivy Version =========="
+                      trivy --version
+                     '''
 
-                    echo "========== Docker Version =========="
-                    docker --version
-
-                    echo "========== Trivy Version =========="
-                    trivy --version
-                '''
+                    if (isUnix()) {
+                        sh cmd
+                    } else {
+                        bat cmd.replace('"', '')
+                    }
                 }
             }
         }
@@ -167,5 +160,5 @@ pipeline {
                 }
             }
         }
-    }    
+    }
 }
