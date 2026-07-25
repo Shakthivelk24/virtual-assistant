@@ -322,6 +322,7 @@ pipeline {
                 archiveArtifacts artifacts: "${TRIVY_REPORT_DIR}/**", allowEmptyArchive: true
             }
         }
+    }
         // ====================================================
         // POST-BUILD ACTIONS
         // Send notifications.
