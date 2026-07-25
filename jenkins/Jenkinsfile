@@ -160,5 +160,286 @@ pipeline {
                 }
             }
         }
+        // ====================================================
+        // STAGE 7: DOCKER LOGIN
+        // Log in to Docker Hub to push images
+        // ====================================================
+        stage('🔑 Docker Login') {
+            steps {
+                customLog('Logging in to Docker Hub...')
+                dockerLogin()
+            }
+        }
+        // ====================================================
+        // STAGE 8: BUILD DOCKER IMAGES
+        // Build Docker images for frontend and backend
+        // ====================================================
+        stage('🐳 Build Docker Images') {
+            parallel {
+                stage('Build Frontend Image') {
+                    steps {
+                        customLog('Building frontend Docker image...')
+
+                        dockerBuild(
+                           FRONTEND_IMAGE,
+                           'docker/frontend/Dockerfile',
+                           '.',
+                           IMAGE_TAG
+                        )
+                    }
+                }
+
+                stage('Build Backend Image') {
+                    steps {
+                        customLog('Building backend Docker image...')
+
+                        dockerBuild(
+                          BACKEND_IMAGE,
+                          'docker/backend/Dockerfile',
+                          '.',
+                          IMAGE_TAG
+                        )
+                    }
+                }
+            }
+        }
+        // ====================================================
+        // STAGE 9: SCAN DOCKER IMAGES
+        // Scan Docker images for vulnerabilities using Trivy
+        // ====================================================
+        stage('🛡️ Trivy Image Scan') {
+            parallel {
+                stage('Scan Frontend Image') {
+                    steps {
+                        trivyScan(
+                          imageName: FRONTEND_IMAGE,
+                          imageVersion: IMAGE_TAG,
+                          reportDir: TRIVY_REPORT_DIR,
+                          reportName: 'frontend'
+                     )
+                    }
+                }
+
+                stage('Scan Backend Image') {
+                    steps {
+                        trivyScan(
+                          imageName: BACKEND_IMAGE,
+                          imageVersion: IMAGE_TAG,
+                          reportDir: TRIVY_REPORT_DIR,
+                          reportName: 'backend'
+                        )
+                    }
+                }
+            }
+        }
+        // ====================================================
+        // STAGE 10: TRIVY SECRET SCAN
+        // Scan source code for hardcoded secrets
+        // ====================================================
+        stage('🔑 Trivy Secret Scan') {
+            steps {
+                trivySecretScan(
+                  reportDir: TRIVY_REPORT_DIR
+                )
+            }
+        }
+        // ====================================================
+        // STAGE 11: PUSH DOCKER IMAGES
+        // Push Docker images to Docker Hub
+        // ====================================================
+        stage('📤 Push Docker Images') {
+            parallel {
+                stage('Push Frontend Image') {
+                    steps {
+                        customLog('Pushing frontend Docker image...')
+
+                        dockerPush(
+                           FRONTEND_IMAGE,
+                           IMAGE_TAG
+                        )
+                    }
+                }
+
+                stage('Push Backend Image') {
+                    steps {
+                        customLog('Pushing backend Docker image...')
+
+                        dockerPush(
+                           BACKEND_IMAGE,
+                           IMAGE_TAG
+                        )
+                    }
+                }
+            }
+        }
+        // ====================================================
+        // Stage 12: Create .env File
+        // Create a .env file with environment variables for deployment
+        // ====================================================
+        stage('📝 Create .env File') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'backend-env', variable: 'ENV_FILE')]) {
+                        if (isUnix()) {
+                            sh '''
+                              cp "$ENV_FILE" server/.env
+                            '''
+                        } else {
+                            bat '''
+                              copy "%ENV_FILE%" "server\\.env"
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+        // ====================================================
+        // Stage 13: Deploy Application
+        // Deploy the application using Docker Compose
+        // ====================================================
+        stage('Deploy') {
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh '''
+                          docker compose up -d
+                        '''
+                    } else {
+                        bat '''
+                          docker compose up -d
+                        '''
+                    }
+                }
+            }
+        }
+        // ====================================================
+        // STAGE 14: ARCHIVE REPORTS
+        // Archive Trivy scan reports for later review
+        // ====================================================
+        stage('📁 Archive Reports') {
+            steps {
+                customLog('Archiving Trivy scan reports...')
+                archiveArtifacts artifacts: "${TRIVY_REPORT_DIR}/**", allowEmptyArchive: true
+            }
+        }
+        // ====================================================
+        // POST-BUILD ACTIONS
+        // Send notifications.
+        // ====================================================
+         post {
+            // ====================================================
+            // Build Successful
+            // ====================================================
+            success {
+                customLog("Pipeline SUCCEEDED — Build ${BUILD_NUMBER}")
+
+                emailext(
+                 subject: "✅ SUCCESS | ${JOB_NAME} #${BUILD_NUMBER}",
+                 mimeType: 'text/html',
+                 to: 'shakthivelk1124@gmail.com',
+                 body: """
+                 <h2 style="color:green;">Pipeline Succeeded</h2>
+
+                 <p><b>Job:</b> ${JOB_NAME}</p>
+                 <p><b>Build:</b> #${BUILD_NUMBER}</p>
+
+                 <hr>
+
+                 <h3>Application</h3>
+                 <ul>
+                    <li>Frontend: http://localhost:3000</li>
+                 </ul>
+
+                 <p>
+                    <a href="${BUILD_URL}">
+                        View Build Details
+                    </a>
+                 </p>
+              """
+             )
+            }
+            // ====================================================
+            // Build Failed
+           // ====================================================
+          failure {
+            customLog("Pipeline FAILED — Build ${BUILD_NUMBER}")
+
+            emailext(
+            subject: "❌ FAILED | ${JOB_NAME} #${BUILD_NUMBER}",
+            mimeType: 'text/html',
+            to: 'shakthivelk1124@gmail.com',
+            body: """
+                <h2 style="color:red;">Pipeline Failed</h2>
+
+                <p><b>Job:</b> ${JOB_NAME}</p>
+                <p><b>Build:</b> #${BUILD_NUMBER}</p>
+
+                <p>
+                    Please check the Jenkins console output.
+                </p>
+
+                <p>
+                    <a href="${BUILD_URL}">
+                        View Build Logs
+                    </a>
+                </p>
+            """
+        )
+        }
+        // ====================================================
+        // Build Unstable
+        // ====================================================
+        unstable {
+            customLog('Pipeline is UNSTABLE.')
+
+            emailext(
+            subject: "⚠️ UNSTABLE | ${JOB_NAME} #${BUILD_NUMBER}",
+            mimeType: 'text/html',
+            to: 'shakthivelk1124@gmail.com',
+            body: """
+                <h2 style="color:orange;">Pipeline Unstable</h2>
+
+                <p><b>Job:</b> ${JOB_NAME}</p>
+                <p><b>Build:</b> #${BUILD_NUMBER}</p>
+
+                <p>
+                    Some quality checks failed.
+                </p>
+
+                <p>
+                    <a href="${BUILD_URL}">
+                        View Build
+                    </a>
+                </p>
+            """
+        )
+        }
+        // ====================================================
+        // Always Execute
+        // ====================================================
+        always {
+            customLog('Pipeline completed.')
+
+            echo "Build Number : ${BUILD_NUMBER}"
+            echo "Result       : ${currentBuild.currentResult}"
+            echo "Duration     : ${currentBuild.durationString}"
+
+            script {
+                if (isUnix()) {
+                    sh """
+                    docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true
+                    docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG} || true
+
+                    docker system prune -f --filter "until=24h" || true
+                """
+            } else {
+                    bat """
+                    docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG}
+
+                    docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG}
+                """
+                }
+            }
+        }
     }
 }
