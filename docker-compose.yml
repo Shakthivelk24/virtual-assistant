@@ -1,7 +1,7 @@
 services:
   backend:
     container_name: backend
-    image: shakthivelk24/virtualassisstant-backend:${IMAGE_TAG}
+    image: ${BACKEND_IMAGE}:${IMAGE_TAG}
 
     ports:
       - "5000:5000"
@@ -16,7 +16,7 @@ services:
 
   frontend:
     container_name: frontend
-    image: shakthivelk24/virtualassisstant-frontend:${IMAGE_TAG}
+    image: ${FRONTEND_IMAGE}:${IMAGE_TAG}
 
     ports:
       - "3000:80"
