@@ -20,7 +20,7 @@ function SignUp() {
         setError("");
          try{
             console.log("Signing up with:", {name, email, password});
-            let result = await axios.post(`${serverUrl}/api/auth/signup`,{
+            let result = await axios.post(`${serverUrl}/auth/signup`,{
                 name,
                 email,
                 password

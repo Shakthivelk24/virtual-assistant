@@ -21,7 +21,7 @@ function UserContext({ children }) { // Define the UserContext component
 
   try {
     const result = await axios.get(
-      `${serverUrl}/api/user/current`,
+      `${serverUrl}/user/current`,
       { withCredentials: true }
     );
 
@@ -40,7 +40,7 @@ function UserContext({ children }) { // Define the UserContext component
   // Function to get response from Gemini API
   const getGeminiResponse = async (prompt) => {
     try {
-      const result = await axios.post(`${serverUrl}/api/user/ask`, { command: prompt }, {withCredentials:true});
+      const result = await axios.post(`${serverUrl}/user/ask`, { command: prompt }, {withCredentials:true});
       return result.data;
     } catch (error) {
       console.log("Error in getting Gemini response:", error);

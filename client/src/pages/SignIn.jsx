@@ -18,14 +18,14 @@ function SignIn() {
     setError("");
     try {
       let result = await axios.post(
-        `${serverUrl}/api/auth/signin`,
+        `${serverUrl}/auth/signin`,
         {
           email,
           password,
         },
         { withCredentials: true },
       );
-      const user = await axios.get(`${serverUrl}/api/user/current`, {
+      const user = await axios.get(`${serverUrl}/user/current`, {
         withCredentials: true,
       });
       setUserData(user.data);

@@ -19,7 +19,7 @@ function Customize2() {
         }else{
            formData.append('imageUrl', selectedImage);
         }
-        const result = await axios.put(`${serverUrl}/api/user/update`,formData,{withCredentials:true})
+        const result = await axios.put(`${serverUrl}/user/update`,formData,{withCredentials:true})
         setLoading(false);
 
         console.log("Assistant Updated :",result.data);
