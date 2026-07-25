@@ -326,42 +326,44 @@ pipeline {
         // POST-BUILD ACTIONS
         // Send notifications.
         // ====================================================
-         post {
-            // ====================================================
-            // Build Successful
-            // ====================================================
-            success {
-                customLog("Pipeline SUCCEEDED — Build ${BUILD_NUMBER}")
+        post {
+        // ====================================================
+        // Build Successful
+        // ====================================================
+        success {
+            customLog("Pipeline SUCCEEDED — Build ${BUILD_NUMBER}")
 
-                emailext(
-                 subject: "✅ SUCCESS | ${JOB_NAME} #${BUILD_NUMBER}",
-                 mimeType: 'text/html',
-                 to: 'shakthivelk1124@gmail.com',
-                 body: """
-                 <h2 style="color:green;">Pipeline Succeeded</h2>
+            emailext(
+            subject: "✅ SUCCESS | ${JOB_NAME} #${BUILD_NUMBER}",
+            mimeType: 'text/html',
+            to: 'shakthivelk1124@gmail.com',
+            body: """
+                <h2 style="color:green;">Pipeline Succeeded</h2>
 
-                 <p><b>Job:</b> ${JOB_NAME}</p>
-                 <p><b>Build:</b> #${BUILD_NUMBER}</p>
+                <p><b>Job:</b> ${JOB_NAME}</p>
+                <p><b>Build:</b> #${BUILD_NUMBER}</p>
 
-                 <hr>
+                <hr>
 
-                 <h3>Application</h3>
-                 <ul>
+                <h3>Application</h3>
+                <ul>
                     <li>Frontend: http://localhost:3000</li>
-                 </ul>
+                    <li>Backend: http://localhost:5000</li>
+                </ul>
 
-                 <p>
+                <p>
                     <a href="${BUILD_URL}">
                         View Build Details
                     </a>
-                 </p>
-              """
-             )
-            }
-            // ====================================================
-            // Build Failed
-           // ====================================================
-          failure {
+                </p>
+            """
+        )
+        }
+
+        // ====================================================
+        // Build Failed
+        // ====================================================
+        failure {
             customLog("Pipeline FAILED — Build ${BUILD_NUMBER}")
 
             emailext(
@@ -386,6 +388,7 @@ pipeline {
             """
         )
         }
+
         // ====================================================
         // Build Unstable
         // ====================================================
@@ -414,10 +417,11 @@ pipeline {
             """
         )
         }
+
         // ====================================================
         // Always Execute
         // ====================================================
-        always {
+         always {
             customLog('Pipeline completed.')
 
             echo "Build Number : ${BUILD_NUMBER}"
@@ -440,6 +444,7 @@ pipeline {
                 """
                 }
             }
+          }
         }
     }
 }
