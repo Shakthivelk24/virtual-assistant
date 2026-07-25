@@ -6,7 +6,7 @@ pipeline {
     }
     environment {
         // Application
-        APP_NAME = 'request-system'
+        APP_NAME = 'Virtual Assistant'
         APP_VERSION = "1.0.${BUILD_NUMBER}"
 
         // Docker Images
@@ -18,7 +18,7 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}"
 
         // SonarQube
-        SONAR_PROJECT_KEY = 'Virtual Assistant'
+        SONAR_PROJECT_KEY = 'Virtual_Assistant'
 
         // // Reports
         TRIVY_REPORT_DIR = 'reports/trivy'
