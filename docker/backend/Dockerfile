@@ -5,6 +5,10 @@
 
 FROM node:22-alpine AS dependencies
 
+# Update npm to the latest version
+RUN npm install -g npm@latest
+
+
 # Install OS packages needed for native npm modules
 # python3, make, g++: required to compile native addons (bcrypt, canvas, etc.)
 # dumb-init: proper PID 1 init system for containers
@@ -24,6 +28,10 @@ RUN npm ci
 # ============================================================
 
 FROM node:22-alpine AS production
+
+# Update npm to the latest version
+RUN npm install -g npm@latest
+
 
 # Install dumb-init in the production image
 # dumb-init correctly handles PID 1 responsibilities:
