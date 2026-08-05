@@ -55,15 +55,9 @@ function Home() {
     utterance.lang = "ka-IN";
     const voices = synth.getVoices();
     const hindiVoice = voices.find((voice) => voice.lang === "hi-IN");
-    const tamilVoice = voices.find((voice) => voice.lang === "ta-IN");
-    const kannadaVoice = voices.find((voice) => voice.lang === "ka-IN");
     if (hindiVoice) {
       utterance.voice = hindiVoice;
-    } else if (tamilVoice) {
-      utterance.voice = tamilVoice;
-    } else if (kannadaVoice) {
-      utterance.voice = kannadaVoice;
-    }
+    } 
     utterance.onend = () => {
       setAICommand("");
       isSpeakingRef.current = false;
