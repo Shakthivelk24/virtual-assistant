@@ -111,26 +111,85 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 4: STATIC CODE ANALYSIS
+        // STAGE 4: RUN TESTS
+        // Execute unit and integration tests
+        // ====================================================
+        stage('🧪 Run Tests') {
+            parallel {
+                stage('Frontend Tests') {
+                    steps {
+                        npmTest(
+                         'client',
+                         'vitest',
+                         'coverage',
+                         'junit.xml'
+                        )
+                    }
+                }
+
+                stage('Backend Tests') {
+                    steps {
+                        npmTest(
+                         'server',
+                         'jest',
+                         'coverage',
+                         'junit.xml'
+                        )
+                    }
+                }
+            }
+        }
+        stage('Verify Coverage Files') {
+            steps {
+                bat '''
+                 if exist client\\coverage\\lcov.info (
+                     echo Frontend LCOV found
+                 ) else (
+                     echo Frontend LCOV NOT FOUND
+                 )
+
+                 if exist server\\coverage\\lcov.info (
+                     echo Backend LCOV found
+                 ) else (
+                     echo Backend LCOV NOT FOUND
+                 )
+                 '''
+            }
+        }
+        // ====================================================
+        // STAGE 5: STATIC CODE ANALYSIS
         // Run SonarQube analysis on the codebase
         // ====================================================
         stage('🔍 Static Code Analysis') {
             steps {
                 customLog('Running SonarQube analysis...')
+
                 sonarqubeScan(
-                    scannerName: 'SonarScanner',
-                    sonarServer: 'SonarQube',
-                    projectKey: "$SONAR_PROJECT_KEY",
-                    projectName: "$APP_NAME",
-                    projectVersion: "$APP_VERSION",
-                    sources: 'client/src,server',
-                    exclusions: '**/node_modules/**,**/dist/**,**/coverage/**'
-                )
+                 scannerName: 'SonarScanner',
+                 sonarServer: 'SonarQube',
+                 projectKey: SONAR_PROJECT_KEY,
+                 projectName: APP_NAME,
+                 projectVersion: APP_VERSION,
+                 sources: 'client/src,server',
+                 exclusions: '''
+                  **/node_modules/**,
+                  **/dist/**,
+                  **/coverage/**,
+                  **/lcov-report/**,
+                  **/*.test.js,
+                  **/*.test.jsx,
+                  **/*.spec.js,
+                  **/*.spec.jsx,
+                  server/tests/**
+                '''.trim().replaceAll('\\s+', ''),
+                jsCoverage: 'client/coverage/lcov.info,server/coverage/lcov.info'
+        )
+
                 customLog('SonarQube analysis submitted')
             }
         }
         // ====================================================
-        // STAGE 5: QUALITY GATE
+        // STAGE 6: QUALITY GATE
         // Wait for SonarQube quality gate result
         // ====================================================
         stage('✅ Quality Gate') {
@@ -140,7 +199,7 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 6: BUILD APPLICATION
+        // STAGE 7: BUILD APPLICATION
         // Compile React frontend for production
         // ====================================================
         stage('🏗️ Build Application') {
@@ -161,7 +220,7 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 7: DOCKER LOGIN
+        // STAGE 8: DOCKER LOGIN
         // Log in to Docker Hub to push images
         // ====================================================
         stage('🔑 Docker Login') {
@@ -171,7 +230,7 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 8: BUILD DOCKER IMAGES
+        // STAGE 9: BUILD DOCKER IMAGES
         // Build Docker images for frontend and backend
         // ====================================================
         stage('🐳 Build Docker Images') {
@@ -204,7 +263,7 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 9: SCAN DOCKER IMAGES
+        // STAGE 10: SCAN DOCKER IMAGES
         // Scan Docker images for vulnerabilities using Trivy
         // ====================================================
         stage('🛡️ Trivy Image Scan') {
@@ -233,7 +292,7 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 10: TRIVY SECRET SCAN
+        // STAGE 12: TRIVY SECRET SCAN
         // Scan source code for hardcoded secrets
         // ====================================================
         stage('🔑 Trivy Secret Scan') {
@@ -244,7 +303,7 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 11: PUSH DOCKER IMAGES
+        // STAGE 13: PUSH DOCKER IMAGES
         // Push Docker images to Docker Hub
         // ====================================================
         stage('📤 Push Docker Images') {
@@ -273,7 +332,7 @@ pipeline {
             }
         }
         // ====================================================
-        // Stage 12: Create .env File
+        // Stage 14: Create .env File
         // Create a .env file with environment variables for deployment
         // ====================================================
         stage('📝 Create .env File') {
@@ -294,7 +353,7 @@ pipeline {
             }
         }
         // ====================================================
-        // Stage 13: Deploy Application
+        // Stage 15: Deploy Application
         // Deploy the application using Docker Compose
         // ====================================================
         stage('Deploy') {
@@ -313,7 +372,7 @@ pipeline {
             }
         }
         // ====================================================
-        // STAGE 14: ARCHIVE REPORTS
+        // STAGE 16: ARCHIVE REPORTS
         // Archive Trivy scan reports for later review
         // ====================================================
         stage('📁 Archive Reports') {
@@ -422,7 +481,7 @@ pipeline {
         // ====================================================
         // Always Execute
         // ====================================================
-         always {
+        always {
             customLog('Pipeline completed.')
 
             echo "Build Number : ${BUILD_NUMBER}"
@@ -446,5 +505,5 @@ pipeline {
                 }
             }
         }
-    }
+        }
 }
