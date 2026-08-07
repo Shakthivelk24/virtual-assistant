@@ -12,6 +12,7 @@ import httpMetrics from "./metrics/httpMetrics.js";
 dotenv.config();
 
 const app = express();
+app.disable("x-powered-by");
 
 // ============================================================
 // Middleware
