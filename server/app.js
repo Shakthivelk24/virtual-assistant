@@ -23,8 +23,10 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: [process.env.FRONTEND_URL,"http://localhost",
-      "http://10.28.9.87:5000"],
+    origin: [
+      process.env.FRONTEND_URL,
+      "http://localhost"
+    ].filter(Boolean),
     credentials: true,
   })
 );
