@@ -8,6 +8,7 @@ import userRoutes from "./routers/user.routes.js";
 
 import register from "./metrics/metrics.js";
 import httpMetrics from "./metrics/httpMetrics.js";
+import mongoose from "mongoose";
 
 dotenv.config();
 
@@ -54,6 +55,10 @@ app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "UP",
     service: "backend",
+    database:
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : "disconnected",
   });
 });
 
