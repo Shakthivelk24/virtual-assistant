@@ -7,39 +7,91 @@ import toast from "react-hot-toast";
 
 function SignIn() {
   const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { serverUrl, userData, setUserData } = useContext(userDataContext);
-  const handleSignUp = async (e) => {
+
+  const { serverUrl, setUserData } = useContext(userDataContext);
+
+  const handleSignIn = async (e) => {
     e.preventDefault();
+
     setLoading(true);
     setError("");
+
     try {
-      let result = await axios.post(
+      console.log("Signing in with:", {
+        email,
+      });
+
+      // Remove any old token
+      localStorage.removeItem("token");
+
+      // Sign in
+      const result = await axios.post(
         `${serverUrl}/auth/signin`,
         {
           email,
           password,
         },
-        { withCredentials: true },
+        {
+          withCredentials: true,
+        }
       );
-      const user = await axios.get(`${serverUrl}/user/current`, {
-        withCredentials: true,
-      });
+
+      console.log("Signin response:", result.data);
+
+      // Make sure backend returned JWT
+      if (!result.data?.token) {
+        throw new Error("Token was not received from the server");
+      }
+
+      // Store JWT
+      localStorage.setItem("token", result.data.token);
+
+      console.log("Token stored successfully");
+
+      // Get current user using Bearer token
+      const user = await axios.get(
+        `${serverUrl}/user/current`,
+        {
+          withCredentials: true,
+          headers: {
+            Authorization: `Bearer ${result.data.token}`,
+          },
+        }
+      );
+
+      // Store actual user data
       setUserData(user.data);
+
       toast.success("Signed In Successfully");
+
       setLoading(false);
+
       navigate("/");
+
     } catch (err) {
+      console.error("Error during sign in:", err);
+
+      localStorage.removeItem("token");
+
       setUserData(null);
-      toast.error("Sign In Failed");
-      console.log("Error during sign in:", err.message);
-      setError(err.response?.data?.message || "An error occurred");
+
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "An error occurred during sign in";
+
+      setError(errorMessage);
+      toast.error(errorMessage);
+
       setLoading(false);
     }
   };
+
   return (
     <div
       className="w-full h-screen bg-cover bg-center flex justify-center items-center"
@@ -47,11 +99,15 @@ function SignIn() {
     >
       <form
         className="w-[90%] h-135 max-w-110 bg-[#ebe5e57b] backdrop-blur-md:shadow-lg shadow-black-800 flex flex-col items-center justify-center gap-6 p-6 rounded-lg px-[30px]"
-        onSubmit={handleSignUp}
+        onSubmit={handleSignIn}
       >
         <h1 className="text-white text-[30px] font-semibold mb-[30px]">
-          Register to <span className="text-blue-800">Virtual Assistant</span>
+          Register to{" "}
+          <span className="text-blue-800">
+            Virtual Assistant
+          </span>
         </h1>
+
         <input
           type="email"
           placeholder="Enter your Email"
@@ -62,6 +118,7 @@ function SignIn() {
           }}
           value={email}
         />
+
         <div className="w-full h-[60px] border-2 border-black bg-transparent text-black font-medium rounded-full text-[18px] flex items-center">
           <input
             type="password"
@@ -74,9 +131,13 @@ function SignIn() {
             value={password}
           />
         </div>
+
         {error.length > 0 && (
-          <p className="text-red-500 text-[14px]">{error}</p>
+          <p className="text-red-500 text-[14px]">
+            {error}
+          </p>
         )}
+
         <button
           type="submit"
           className="min-w-[150px] h-[60px] mt-[10px] bg-blue-500 text-1xl font-semibold text-white rounded-full hover:bg-blue-600 cursor-pointer"
@@ -84,6 +145,7 @@ function SignIn() {
         >
           {loading ? "Signing In..." : "Sign In"}
         </button>
+
         <p className="text-white text-[15px]">
           want to create new account?{" "}
           <span

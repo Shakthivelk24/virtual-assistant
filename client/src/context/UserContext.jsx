@@ -1,66 +1,157 @@
-// UserContext.jsx for managing user data and images in a React application
-import React, { createContext, useState } from "react"; // Import necessary React functions
-import axios from "axios"; // Import axios for HTTP requests
-import { useEffect } from "react"; // Import useEffect for side effects
-import Loading from "../components/Loading.jsx"; // Import Loading component for displaying loading state
+import React, {
+  createContext,
+  useState,
+  useEffect,
+} from "react";
+import axios from "axios";
 
-// Create a context for user data
 export const userDataContext = createContext();
 
-function UserContext({ children }) { // Define the UserContext component
-  const serverUrl = "/api"; // Define the server URL
-  const [userData, setUserData] = React.useState(null); // State for storing user data
-  const [frontendImage, setFrontendImage] = useState(null); // State for storing frontend image
-  const [backendImage, setBackendImage] = useState(null); // State for storing backend image
-  const [selectedImage, setSelectedImage] = useState(null); // State for storing selected image
-  const [loading, setLoading] = useState(true); // State for loading status
-  // Function to fetch current user data from the server
+function UserContext({ children }) {
+  const serverUrl =
+    import.meta.env.VITE_BACKEND_URL || "/api";
 
-  const handleCurrentUser = async () => {
-  setLoading(true);
+  const [userData, setUserData] = useState(null);
+  const [frontendImage, setFrontendImage] = useState(null);
+  const [backendImage, setBackendImage] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  try {
-    const result = await axios.get(
-      `${serverUrl}/user/current`,
-      { withCredentials: true }
+  // ================================
+  // GET AUTH CONFIG
+  // ================================
+  const getAuthConfig = () => {
+    const token = localStorage.getItem("token");
+
+    console.log("TOKEN EXISTS:", !!token);
+
+    if (!token) {
+      return {
+        withCredentials: true,
+      };
+    }
+
+    console.log(
+      "TOKEN PREVIEW:",
+      token.substring(0, 20) + "..."
     );
 
-    setUserData(result.data);
-  } catch (error) {
-    if (error.response?.status === 401) {
-      // User is not logged in
-      setUserData(null);
-    } else {
-      console.error(error);
+    return {
+      withCredentials: true,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    };
+  };
+
+  // ================================
+  // GET CURRENT USER
+  // ================================
+  const handleCurrentUser = async () => {
+    setLoading(true);
+
+    try {
+      const config = getAuthConfig();
+
+      console.log("Getting current user...");
+      console.log("Authorization header exists:", !!config.headers?.Authorization);
+
+      const result = await axios.get(
+        `${serverUrl}/user/current`,
+        config
+      );
+
+      console.log("CURRENT USER RESPONSE:", result.data);
+
+      setUserData(result.data);
+
+    } catch (error) {
+
+      console.log(
+        "CURRENT USER ERROR:",
+        error.response?.data || error.message
+      );
+
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        setUserData(null);
+      } else {
+        console.error(error);
+      }
+
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
-  // Function to get response from Gemini API
+  };
+
+  // ================================
+  // ASK ASSISTANT
+  // ================================
   const getGeminiResponse = async (prompt) => {
     try {
-      const result = await axios.post(`${serverUrl}/user/ask`, { command: prompt }, {withCredentials:true});
+
+      const config = getAuthConfig();
+
+      console.log("Sending assistant request...");
+      console.log(
+        "Authorization header exists:",
+        !!config.headers?.Authorization
+      );
+
+      const result = await axios.post(
+        `${serverUrl}/user/ask`,
+        {
+          command: prompt,
+        },
+        config
+      );
+
       return result.data;
+
     } catch (error) {
-      console.log("Error in getting Gemini response:", error);
+
+      console.error(
+        "Error in getting Gemini response:",
+        error.response?.data || error.message
+      );
+
+      throw error;
     }
-  }
-  
-  // useEffect to fetch current user data on component mount
+  };
+
+  // ================================
+  // INITIAL USER CHECK
+  // ================================
   useEffect(() => {
     handleCurrentUser();
   }, []);
-  // Define the value to be provided by the context
+
   const value = {
-    serverUrl,userData, setUserData,frontendImage,setFrontendImage,backendImage,setBackendImage,selectedImage,setSelectedImage,getGeminiResponse,loading,setLoading
+    serverUrl,
+
+    userData,
+    setUserData,
+
+    frontendImage,
+    setFrontendImage,
+
+    backendImage,
+    setBackendImage,
+
+    selectedImage,
+    setSelectedImage,
+
+    getGeminiResponse,
+    handleCurrentUser,
+
+    loading,
+    setLoading,
   };
+
   return (
-    <div>
-      <userDataContext.Provider value={value}> 
-        {children} 
-      </userDataContext.Provider> 
-    </div>
+    <userDataContext.Provider value={value}>
+      {children}
+    </userDataContext.Provider>
   );
 }
 
