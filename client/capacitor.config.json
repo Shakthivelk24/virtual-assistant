@@ -1,0 +1,20 @@
+{
+  "appId": "com.shakthivel.virtualassistant",
+  "appName": "Virtual Assistant",
+  "webDir": "dist",
+
+  "server": {
+    "androidScheme": "http"
+  },
+
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 2000,
+      "backgroundColor": "#010140",
+      "androidSplashResourceName": "virtual_assistant_logo",
+      "androidScaleType": "CENTER",
+      "showSpinner": false
+    }
+  }
+}
