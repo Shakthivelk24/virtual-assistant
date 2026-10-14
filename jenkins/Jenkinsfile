@@ -386,16 +386,16 @@ pipeline {
             }
         }
 
-        // ====================================================
-        // STAGE 16: ARCHIVE REPORTS
-        // Archive Trivy scan reports for later review
-        // ====================================================
-        stage('📁 Archive Reports') {
-            steps {
-                customLog('Archiving Trivy scan reports...')
-                archiveArtifacts artifacts: "${TRIVY_REPORT_DIR}/**", allowEmptyArchive: true
-            }
-        }
+        // // ====================================================
+        // // STAGE 16: ARCHIVE REPORTS
+        // // Archive Trivy scan reports for later review
+        // // ====================================================
+        // stage('📁 Archive Reports') {
+        //     steps {
+        //         customLog('Archiving Trivy scan reports...')
+        //         archiveArtifacts artifacts: "${TRIVY_REPORT_DIR}/**", allowEmptyArchive: true
+        //     }
+        // }
     }
         // ====================================================
         // POST-BUILD ACTIONS
