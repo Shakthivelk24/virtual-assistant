@@ -155,6 +155,7 @@ describe("Auth Controller", () => {
 
       expect(res.json).toHaveBeenCalledWith({
         message: "Signup success",
+        token: "jwt-token",
       });
     });
 
@@ -251,6 +252,7 @@ describe("Auth Controller", () => {
 
       expect(res.json).toHaveBeenCalledWith({
         message: "Signin success",
+        token: "jwt-token",
       });
     });
 

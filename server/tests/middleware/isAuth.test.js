@@ -33,7 +33,7 @@ describe("isAuth Middleware", () => {
     process.env.JWT_SECRET = "test-secret";
   });
 
-  test("should authenticate valid token", async () => {
+  test("should authenticate valid token from cookies", async () => {
     jwt.verify.mockReturnValue({
       id: "user123",
     });
@@ -45,7 +45,6 @@ describe("isAuth Middleware", () => {
     };
 
     const res = mockResponse();
-
     const next = jest.fn();
 
     await isAuth(req, res, next);
@@ -54,11 +53,33 @@ describe("isAuth Middleware", () => {
       "jwt-token",
       "test-secret",
     );
-
     expect(req.userId).toBe("user123");
-
     expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
 
+  test("should authenticate valid Bearer token from authorization header", async () => {
+    jwt.verify.mockReturnValue({
+      id: "bearer-user-456",
+    });
+
+    const req = {
+      headers: {
+        authorization: "Bearer header-jwt-token",
+      },
+    };
+
+    const res = mockResponse();
+    const next = jest.fn();
+
+    await isAuth(req, res, next);
+
+    expect(jwt.verify).toHaveBeenCalledWith(
+      "header-jwt-token",
+      "test-secret",
+    );
+    expect(req.userId).toBe("bearer-user-456");
+    expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });
 
@@ -68,17 +89,49 @@ describe("isAuth Middleware", () => {
     };
 
     const res = mockResponse();
-
     const next = jest.fn();
 
     await isAuth(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-
     expect(res.json).toHaveBeenCalledWith({
-      message: "Unauthorized",
+      message: "Unauthorized - Token missing",
     });
+    expect(next).not.toHaveBeenCalled();
+  });
 
+  test("should return 401 when req has no headers or cookies defined", async () => {
+    const req = {};
+
+    const res = mockResponse();
+    const next = jest.fn();
+
+    await isAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Unauthorized - Token missing",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("should return 401 when authorization header is not Bearer and cookies are missing", async () => {
+    const req = {
+      headers: {
+        authorization: "Basic credentials",
+      },
+      cookies: {},
+    };
+
+    const res = mockResponse();
+    const next = jest.fn();
+
+    await isAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Unauthorized - Token missing",
+    });
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -94,19 +147,18 @@ describe("isAuth Middleware", () => {
     };
 
     const res = mockResponse();
-
     const next = jest.fn();
 
     await isAuth(req, res, next);
 
-    expect(jwt.verify).toHaveBeenCalled();
-
+    expect(jwt.verify).toHaveBeenCalledWith(
+      "invalid-token",
+      "test-secret",
+    );
     expect(res.status).toHaveBeenCalledWith(401);
-
     expect(res.json).toHaveBeenCalledWith({
-      message: "Unauthorized",
+      message: "Unauthorized - Invalid token",
     });
-
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -116,23 +168,20 @@ describe("isAuth Middleware", () => {
     });
 
     const req = {
-      cookies: {
-        token: "jwt-token",
+      headers: {
+        authorization: "Bearer jwt-token",
       },
     };
 
     const res = mockResponse();
-
     const next = jest.fn();
 
     await isAuth(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
-
     expect(res.json).toHaveBeenCalledWith({
-      message: "Unauthorized",
+      message: "Unauthorized - Invalid token",
     });
-
     expect(next).not.toHaveBeenCalled();
   });
 });

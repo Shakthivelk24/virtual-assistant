@@ -1,5 +1,6 @@
 import express from "express";
 import request from "supertest";
+import mongoose from "mongoose";
 import { jest } from "@jest/globals";
 
 // ============================
@@ -40,7 +41,7 @@ const { default: app } = await import("../app.js");
 // ============================
 
 describe("App", () => {
-  test("GET /api/health returns 200", async () => {
+  test("GET /api/health returns 200 with database disconnected", async () => {
     const res = await request(app).get("/api/health");
 
     expect(res.status).toBe(200);
@@ -48,6 +49,29 @@ describe("App", () => {
     expect(res.body).toEqual({
       status: "UP",
       service: "backend",
+      database: "disconnected",
+    });
+  });
+
+  test("GET /api/health returns database connected when mongoose readyState is 1", async () => {
+    const originalReadyState = mongoose.connection.readyState;
+    Object.defineProperty(mongoose.connection, "readyState", {
+      value: 1,
+      configurable: true,
+    });
+
+    const res = await request(app).get("/api/health");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      status: "UP",
+      service: "backend",
+      database: "connected",
+    });
+
+    Object.defineProperty(mongoose.connection, "readyState", {
+      value: originalReadyState,
+      configurable: true,
     });
   });
 

@@ -4,13 +4,13 @@ const isAuth = async (req, res, next) => {
   try {
     console.log("========== AUTH CHECK ==========");
 
-    console.log("Authorization:", req.headers.authorization);
+    console.log("Authorization:", req.headers?.authorization);
     console.log("Cookies:", req.cookies);
 
     let authToken = null;
 
     // 1. Check Authorization header
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers?.authorization;
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       authToken = authHeader.split(" ")[1];
