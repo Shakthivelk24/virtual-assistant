@@ -356,21 +356,39 @@ pipeline {
         // Stage 15: Deploy Application
         // Deploy the application using Docker Compose
         // ====================================================
+
         stage('Deploy') {
             steps {
                 script {
                     if (isUnix()) {
                         sh '''
-                          docker compose up -d
-                        '''
-                    } else {
+                    set -e
+
+                    echo "Checking existing backend container..."
+                    docker ps -a --filter "name=^/backend$"
+
+                    echo "Removing conflicting backend container if it exists..."
+                    docker rm -f backend 2>/dev/null || true
+
+                    echo "Deploying application..."
+                    docker compose up -d --build --remove-orphans
+
+                    echo "Checking deployment status..."
+                    docker compose ps
+                '''
+            } else {
                         bat '''
-                          docker compose up -d
-                        '''
+                    @echo off
+                    docker rm -f backend
+                    docker compose up -d --build --remove-orphans
+                    docker compose ps
+                    if errorlevel 1 exit /b 1
+                '''
                     }
                 }
             }
         }
+
         // ====================================================
         // STAGE 16: ARCHIVE REPORTS
         // Archive Trivy scan reports for later review
