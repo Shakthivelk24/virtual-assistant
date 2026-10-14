@@ -139,23 +139,23 @@ pipeline {
                 }
             }
         }
-        stage('Verify Coverage Files') {
-            steps {
-                bat '''
-                 if exist client\\coverage\\lcov.info (
-                     echo Frontend LCOV found
-                 ) else (
-                     echo Frontend LCOV NOT FOUND
-                 )
+        // stage('Verify Coverage Files') {
+        //     steps {
+        //         bat '''
+        //          if exist client\\coverage\\lcov.info (
+        //              echo Frontend LCOV found
+        //          ) else (
+        //              echo Frontend LCOV NOT FOUND
+        //          )
 
-                 if exist server\\coverage\\lcov.info (
-                     echo Backend LCOV found
-                 ) else (
-                     echo Backend LCOV NOT FOUND
-                 )
-                 '''
-            }
-        }
+        //          if exist server\\coverage\\lcov.info (
+        //              echo Backend LCOV found
+        //          ) else (
+        //              echo Backend LCOV NOT FOUND
+        //          )
+        //          '''
+        //     }
+        // }
         // ====================================================
         // STAGE 5: STATIC CODE ANALYSIS
         // Run SonarQube analysis on the codebase
