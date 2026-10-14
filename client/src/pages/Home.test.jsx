@@ -1,15 +1,68 @@
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import Home from "./Home";
-import { userDataContext } from "../context/UserContext";
 
-// --------------------
-// Mock Router
-// --------------------
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  act,
+  within,
+} from "@testing-library/react";
 
-const mockNavigate = vi.fn();
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
+
+import Home from "./Home.jsx";
+import { userDataContext } from "../context/UserContext.jsx";
+import axios from "axios";
+
+
+// ============================================================
+// HOISTED MOCKS
+// ============================================================
+
+const { mockTextToSpeech, mockNavigate } = vi.hoisted(() => ({
+  mockTextToSpeech: {
+    stop: vi.fn(),
+    speak: vi.fn(),
+  },
+
+  mockNavigate: vi.fn(),
+}));
+
+
+// ============================================================
+// AXIOS MOCK
+// ============================================================
+
+vi.mock("axios", () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
+
+
+// ============================================================
+// TEXT TO SPEECH MOCK
+// ============================================================
+
+vi.mock("@capacitor-community/text-to-speech", () => ({
+  TextToSpeech: mockTextToSpeech,
+}));
+
+
+// ============================================================
+// REACT ROUTER MOCK
+// ============================================================
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
@@ -20,744 +73,1710 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-// --------------------
-// Mock Assets
-// --------------------
 
-vi.mock("../assets/user.gif", () => ({
-  default: "user.gif",
-}));
+// ============================================================
+// SPEECH RECOGNITION MOCK
+// ============================================================
 
-vi.mock("../assets/AI.gif", () => ({
-  default: "ai.gif",
-}));
+let recognitionInstance = null;
 
-// --------------------
-// Mock Axios
-// --------------------
+class MockSpeechRecognition {
+  constructor() {
+    recognitionInstance = this;
 
-vi.mock("axios", () => ({
-  default: {
-    get: vi.fn(),
+    this.continuous = false;
+    this.lang = "";
+    this.interimResults = false;
+    this.maxAlternatives = 1;
+
+    this.onstart = null;
+    this.onend = null;
+    this.onerror = null;
+    this.onresult = null;
+
+    this.start = vi.fn(() => {
+      if (this.onstart) {
+        this.onstart();
+      }
+    });
+
+    this.stop = vi.fn(() => {
+      if (this.onend) {
+        this.onend();
+      }
+    });
+  }
+}
+
+
+// ============================================================
+// CONTEXT
+// ============================================================
+
+const createContextValue = () => ({
+  userData: {
+    _id: "user123",
+    name: "Shakthi",
+    email: "shakthi@example.com",
+    assistantName: "Radha",
+    assistantImage: "https://example.com/radha.jpg",
   },
-}));
 
-// --------------------
-// Mock Browser APIs
-// --------------------
+  setUserData: vi.fn(),
+
+  serverUrl: "/api",
+
+  getGeminiResponse: vi.fn(),
+
+  frontendImage: null,
+  setFrontendImage: vi.fn(),
+
+  backendImage: null,
+  setBackendImage: vi.fn(),
+
+  selectedImage: null,
+  setSelectedImage: vi.fn(),
+
+  loading: false,
+  setLoading: vi.fn(),
+});
+
+let contextValue;
+
+
+// ============================================================
+// RENDER HELPER
+// ============================================================
+
+const renderHome = (value = contextValue) => {
+  return render(
+    <userDataContext.Provider value={value}>
+      <Home />
+    </userDataContext.Provider>
+  );
+};
+
+
+// ============================================================
+// BEFORE EACH
+// ============================================================
 
 beforeEach(() => {
   vi.clearAllMocks();
 
-  class MockRecognition {
-    start = vi.fn();
-    stop = vi.fn();
-  }
+  contextValue = createContextValue();
 
-  window.SpeechRecognition = MockRecognition;
-  window.webkitSpeechRecognition = MockRecognition;
+  recognitionInstance = null;
 
-  window.speechSynthesis = {
-    speak: vi.fn(),
-    cancel: vi.fn(),
-    getVoices: () => [],
-    onvoiceschanged: null,
-  };
+  localStorage.clear();
 
-  global.SpeechSynthesisUtterance = function (text) {
-    this.text = text;
-  };
+  window.SpeechRecognition = MockSpeechRecognition;
+  window.webkitSpeechRecognition = MockSpeechRecognition;
 
-  window.open = vi.fn();
+  vi.spyOn(window, "open").mockImplementation(() => null);
+
+  mockTextToSpeech.stop.mockResolvedValue(undefined);
+  mockTextToSpeech.speak.mockResolvedValue(undefined);
+
+  mockNavigate.mockClear();
+
+  axios.get.mockResolvedValue({
+    data: {},
+  });
 });
 
-// --------------------
-// Render Helper
-// --------------------
 
-const renderComponent = () => {
-  const setUserData = vi.fn();
+// ============================================================
+// AFTER EACH
+// ============================================================
 
-  const utils = render(
-    <userDataContext.Provider
-      value={{
-        serverUrl: "/api",
-        userData: {
-          assistantName: "Jarvis",
-          assistantImage: "assistant.png",
-        },
-        setUserData,
-        getGeminiResponse: vi.fn(),
-      }}
-    >
-      <MemoryRouter>
-        <Home />
-      </MemoryRouter>
-    </userDataContext.Provider>,
-  );
+afterEach(() => {
+  cleanup();
 
-  return {
-    ...utils,
-    setUserData,
-  };
-};
-// --------------------
-// Tests
-// --------------------
+  vi.restoreAllMocks();
 
-describe("Home Component - Rendering", () => {
-  it("renders welcome text", () => {
-    renderComponent();
+  localStorage.clear();
 
-    expect(screen.getByText(/Welcome to your Assistant/i)).toBeInTheDocument();
+  recognitionInstance = null;
+});
 
-    expect(screen.getByText("Jarvis")).toBeInTheDocument();
+
+// ============================================================
+// HOME COMPONENT TESTS
+// ============================================================
+
+describe("Home Component", () => {
+
+  // ==========================================================
+  // RENDERING
+  // ==========================================================
+
+  it("renders the assistant name", () => {
+    renderHome();
+
+    expect(
+      screen.getByText("Radha", {
+        exact: true,
+      })
+    ).toBeInTheDocument();
   });
+
 
   it("renders assistant image", () => {
-    renderComponent();
+    renderHome();
 
-    expect(screen.getByAltText("Assistant")).toHaveAttribute(
+    const image = screen.getByAltText("Assistant");
+
+    expect(image).toBeInTheDocument();
+
+    expect(image).toHaveAttribute(
       "src",
-      "assistant.png",
+      "https://example.com/radha.jpg"
     );
   });
 
-  it("shows user image initially", () => {
-    renderComponent();
 
-    expect(screen.getByAltText("User")).toBeInTheDocument();
+  it("renders Test Native Voice button", () => {
+    renderHome();
+
+    expect(
+      screen.getByRole("button", {
+        name: /test native voice/i,
+      })
+    ).toBeInTheDocument();
   });
 
-  it("renders desktop buttons", () => {
-    renderComponent();
 
-    expect(screen.getAllByText("Log Out")[0]).toBeInTheDocument();
+  // ==========================================================
+  // TEXT TO SPEECH
+  // ==========================================================
 
-    expect(screen.getAllByText("Customize Assistant")[0]).toBeInTheDocument();
+  it("calls TextToSpeech when Test Native Voice is clicked", async () => {
+    renderHome();
+
+    const button = screen.getByRole("button", {
+      name: /test native voice/i,
+    });
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(
+      mockTextToSpeech.stop
+    ).toHaveBeenCalled();
+
+    expect(
+      mockTextToSpeech.speak
+    ).toHaveBeenCalled();
   });
 
-  it("opens mobile menu", () => {
-    const { container } = renderComponent();
 
-    const menuIcon = container.querySelector("svg");
+  it("uses the correct native voice configuration", async () => {
+    renderHome();
 
-    fireEvent.click(menuIcon);
+    const button = screen.getByRole("button", {
+      name: /test native voice/i,
+    });
 
-    expect(screen.getAllByText("Log Out").length).toBeGreaterThan(1);
+    await act(async () => {
+      fireEvent.click(button);
+    });
 
-    expect(screen.getAllByText("Customize Assistant").length).toBeGreaterThan(
-      1,
+    expect(
+      mockTextToSpeech.speak
+    ).toHaveBeenCalledWith({
+      text: expect.stringContaining(
+        "Hello. This is a test of your virtual assistant voice."
+      ),
+      lang: "en-IN",
+      rate: 1.0,
+      pitch: 1.0,
+      volume: 1.0,
+    });
+  });
+
+
+  // ==========================================================
+  // LOGOUT
+  // ==========================================================
+
+  it("renders logout button", () => {
+    renderHome();
+
+    expect(
+      screen.getByRole("button", {
+        name: /log out/i,
+      })
+    ).toBeInTheDocument();
+  });
+
+
+  it("logs out user with JWT token", async () => {
+    localStorage.setItem(
+      "token",
+      "test-jwt-token"
     );
+
+    axios.get.mockResolvedValueOnce({
+      data: {
+        message: "Logged out successfully",
+      },
+    });
+
+    renderHome();
+
+    const logoutButton = screen.getByRole(
+      "button",
+      {
+        name: /log out/i,
+      }
+    );
+
+    await act(async () => {
+      fireEvent.click(logoutButton);
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      "/api/auth/logout",
+      expect.objectContaining({
+        withCredentials: true,
+
+        headers: {
+          Authorization:
+            "Bearer test-jwt-token",
+        },
+      })
+    );
+
+    expect(
+      localStorage.getItem("token")
+    ).toBeNull();
+
+    expect(
+      contextValue.setUserData
+    ).toHaveBeenCalledWith(null);
+
+    expect(
+      mockNavigate
+    ).toHaveBeenCalledWith("/signin");
   });
 
-  it("closes mobile menu", () => {
-    const { container } = renderComponent();
 
-    const icons = container.querySelectorAll("svg");
+  it("logs out even when token does not exist", async () => {
+    localStorage.removeItem("token");
 
-    fireEvent.click(icons[0]);
+    axios.get.mockResolvedValueOnce({
+      data: {
+        message: "Logged out successfully",
+      },
+    });
 
-    const closeIcon = container.querySelectorAll("svg")[1];
+    renderHome();
 
-    fireEvent.click(closeIcon);
+    const logoutButton = screen.getByRole(
+      "button",
+      {
+        name: /log out/i,
+      }
+    );
 
-    expect(screen.getAllByText("Log Out").length).toBe(1);
+    await act(async () => {
+      fireEvent.click(logoutButton);
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      "/api/auth/logout",
+      expect.objectContaining({
+        withCredentials: true,
+        headers: {},
+      })
+    );
+
+    expect(
+      contextValue.setUserData
+    ).toHaveBeenCalledWith(null);
+
+    expect(
+      mockNavigate
+    ).toHaveBeenCalledWith("/signin");
   });
+
+
+  it("clears token and navigates even when logout API fails", async () => {
+    localStorage.setItem(
+      "token",
+      "test-jwt-token"
+    );
+
+    axios.get.mockRejectedValueOnce(
+      new Error("Logout API failed")
+    );
+
+    renderHome();
+
+    const logoutButton = screen.getByRole(
+      "button",
+      {
+        name: /log out/i,
+      }
+    );
+
+    await act(async () => {
+      fireEvent.click(logoutButton);
+    });
+
+    expect(
+      localStorage.getItem("token")
+    ).toBeNull();
+
+    expect(
+      contextValue.setUserData
+    ).toHaveBeenCalledWith(null);
+
+    expect(
+      mockNavigate
+    ).toHaveBeenCalledWith("/signin");
+  });
+
+
+  // ==========================================================
+  // NAVIGATION
+  // ==========================================================
 
   it("navigates to customize page", () => {
-    renderComponent();
+    renderHome();
 
-    fireEvent.click(screen.getAllByText("Customize Assistant")[0]);
+    const customizeButton =
+      screen.getByRole("button", {
+        name: /customize assistant/i,
+      });
+
+    fireEvent.click(customizeButton);
+
+    expect(
+      mockNavigate
+    ).toHaveBeenCalledWith("/customize");
+  });
+
+
+  it("opens mobile menu", () => {
+    renderHome();
+
+    expect(
+      screen.queryByRole("dialog", {
+        name: /mobile menu/i,
+      })
+    ).not.toBeInTheDocument();
+
+    const menuButton =
+      document.querySelector(".lg\\:hidden");
+
+    expect(menuButton).toBeTruthy();
+
+    fireEvent.click(menuButton);
+
+    const mobileMenu = screen.getByRole("dialog", {
+      name: /mobile menu/i,
+    });
+    expect(mobileMenu).toBeInTheDocument();
+
+    const menuScope = within(mobileMenu);
+
+    expect(
+      menuScope.getByRole("button", {
+        name: /log out/i,
+      })
+    ).toBeInTheDocument();
+
+    const customizeButton = menuScope.getByRole("button", {
+      name: /customize assistant/i,
+    });
+    expect(customizeButton).toBeInTheDocument();
+
+    fireEvent.click(customizeButton);
 
     expect(mockNavigate).toHaveBeenCalledWith("/customize");
   });
-});
-import axios from "axios";
 
-describe("Home Component - Logout", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+
+  // ==========================================================
+  // SPEECH RECOGNITION
+  // ==========================================================
+
+  it("creates speech recognition when assistant exists", () => {
+    renderHome();
+
+    expect(
+      recognitionInstance
+    ).not.toBeNull();
+
+    expect(
+      recognitionInstance.continuous
+    ).toBe(true);
+
+    expect(
+      recognitionInstance.lang
+    ).toBe("en-US");
+
+    expect(
+      recognitionInstance.interimResults
+    ).toBe(false);
+
+    expect(
+      recognitionInstance.maxAlternatives
+    ).toBe(1);
   });
 
-  it("logs out successfully from desktop button", async () => {
-    axios.get.mockResolvedValue({
-      data: {},
+
+  it("starts speech recognition after delay", async () => {
+    renderHome();
+
+    expect(
+      recognitionInstance
+    ).not.toBeNull();
+
+    expect(
+      recognitionInstance.start
+    ).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1000);
+      });
     });
 
-    const { setUserData } = renderComponent();
-
-    fireEvent.click(screen.getAllByText("Log Out")[0]);
-
-    await waitFor(() => {
-      expect(axios.get).toHaveBeenCalled();
-    });
-
-    expect(axios.get).toHaveBeenCalledWith("/api/auth/logout", {
-      withCredentials: true,
-    });
-
-    expect(setUserData).toHaveBeenCalledWith(null);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/signin");
+    expect(
+      recognitionInstance.start
+    ).toHaveBeenCalled();
   });
 
-  it("logs out successfully from mobile menu", async () => {
-    axios.get.mockResolvedValue({
-      data: {},
-    });
 
-    const { container, setUserData } = renderComponent();
+  // ==========================================================
+  // GEMINI COMMAND
+  // ==========================================================
 
-    const menuIcon = container.querySelector("svg");
+  it(
+    "sends command to Gemini when assistant name is detected",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "normal",
+        userInput: "Radha hello",
+        response:
+          "Hello! How can I help you?",
+      });
 
-    fireEvent.click(menuIcon);
+      renderHome();
 
-    fireEvent.click(screen.getAllByText("Log Out")[1]);
+      expect(
+        recognitionInstance
+      ).not.toBeNull();
 
-    await waitFor(() => {
-      expect(axios.get).toHaveBeenCalled();
-    });
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript: "Radha hello",
+              },
+            ],
+          ],
+        });
+      });
 
-    expect(setUserData).toHaveBeenCalledWith(null);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/signin");
-  });
-
-  it("handles logout failure gracefully", async () => {
-    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-    axios.get.mockRejectedValue(new Error("Network Error"));
-
-    renderComponent();
-
-    fireEvent.click(screen.getAllByText("Log Out")[0]);
-
-    await waitFor(() => {
-      expect(spy).toHaveBeenCalled();
-    });
-
-    expect(mockNavigate).not.toHaveBeenCalled();
-
-    spy.mockRestore();
-  });
-
-  it("keeps user logged in when logout request fails", async () => {
-    const { setUserData } = renderComponent();
-
-    axios.get.mockRejectedValue(new Error("Server Error"));
-
-    fireEvent.click(screen.getAllByText("Log Out")[0]);
-
-    await waitFor(() => {
-      expect(axios.get).toHaveBeenCalled();
-    });
-
-    expect(setUserData).not.toHaveBeenCalled();
-  });
-});
-
-describe("Home Component - Speech APIs", () => {
-  let recognition;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    recognition = {
-      start: vi.fn(),
-      stop: vi.fn(),
-      continuous: false,
-      lang: "",
-      interimResults: false,
-      onstart: null,
-      onend: null,
-      onerror: null,
-      onresult: null,
-    };
-
-    class MockRecognition {
-      constructor() {
-        return recognition;
-      }
+      expect(
+        contextValue.getGeminiResponse
+      ).toHaveBeenCalledWith(
+        "Radha hello"
+      );
     }
+  );
 
-    window.SpeechRecognition = MockRecognition;
-    window.webkitSpeechRecognition = MockRecognition;
 
-    window.speechSynthesis = {
-      speak: vi.fn(),
-      cancel: vi.fn(),
-      getVoices: () => [{ lang: "hi-IN", name: "Hindi" }],
-      onvoiceschanged: null,
-    };
+  it(
+    "does not call Gemini when assistant name is not detected",
+    async () => {
+      renderHome();
 
-    global.SpeechSynthesisUtterance = function (text) {
-      this.text = text;
-      this.lang = "";
-      this.voice = null;
-      this.onend = null;
-    };
-  });
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript:
+                  "What is the weather today",
+              },
+            ],
+          ],
+        });
+      });
 
-  it("starts recognition when component mounts", () => {
-    vi.useFakeTimers();
-
-    renderComponent();
-
-    vi.advanceTimersByTime(1000);
-
-    expect(recognition.start).toHaveBeenCalled();
-
-    vi.useRealTimers();
-  });
-
-  it("updates listening state when recognition starts", () => {
-    renderComponent();
-
-    recognition.onstart();
-
-    expect(recognition.start).toHaveBeenCalledTimes(0);
-  });
-
-  it("restarts recognition after onend", () => {
-    vi.useFakeTimers();
-
-    renderComponent();
-
-    recognition.onend();
-
-    vi.advanceTimersByTime(1000);
-
-    expect(recognition.start).toHaveBeenCalled();
-
-    vi.useRealTimers();
-  });
-
-  it("restarts recognition after non-aborted error", () => {
-  vi.useFakeTimers();
-
-  renderComponent();
-
-  recognition.onerror({
-    error: "network",
-  });
-
-  vi.advanceTimersByTime(1000);
-
-  expect(recognition.start).toHaveBeenCalled();
-
-  vi.useRealTimers();
-});
-
-  it("greets the user when voices are loaded", () => {
-    renderComponent();
-
-    window.speechSynthesis.onvoiceschanged();
-
-    expect(window.speechSynthesis.speak).toHaveBeenCalled();
-  });
-
-  it("calls speech synthesis with greeting", () => {
-    renderComponent();
-
-    window.speechSynthesis.onvoiceschanged();
-
-    const utterance = window.speechSynthesis.speak.mock.calls[0][0];
-
-    expect(utterance.text).toContain("Jarvis");
-  });
-
-  it("stops recognition on component unmount", () => {
-    const { unmount } = renderComponent();
-
-    unmount();
-
-    expect(recognition.stop).toHaveBeenCalled();
-  });
-});
-
-describe("Home Component - Gemini Commands", () => {
-  let recognition;
-  let getGeminiResponse;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    recognition = {
-      start: vi.fn(),
-      stop: vi.fn(),
-      continuous: false,
-      lang: "",
-      interimResults: false,
-      onstart: null,
-      onend: null,
-      onerror: null,
-      onresult: null,
-    };
-
-    class MockRecognition {
-      constructor() {
-        return recognition;
-      }
+      expect(
+        contextValue.getGeminiResponse
+      ).not.toHaveBeenCalled();
     }
+  );
 
-    window.SpeechRecognition = MockRecognition;
-    window.webkitSpeechRecognition = MockRecognition;
 
-    window.open = vi.fn();
+  it(
+    "handles Gemini response",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "normal",
+        userInput: "Radha hello",
+        response:
+          "Hello! How can I help you?",
+      });
 
-    window.speechSynthesis = {
-      speak: vi.fn(),
-      cancel: vi.fn(),
-      getVoices: () => [],
-      onvoiceschanged: null,
-    };
+      renderHome();
 
-    global.SpeechSynthesisUtterance = function (text) {
-      this.text = text;
-      this.lang = "";
-      this.voice = null;
-      this.onend = null;
-    };
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript: "Radha hello",
+              },
+            ],
+          ],
+        });
+      });
 
-    getGeminiResponse = vi.fn();
+      expect(
+        contextValue.getGeminiResponse
+      ).toHaveBeenCalledWith(
+        "Radha hello"
+      );
+
+      expect(
+        mockTextToSpeech.speak
+      ).toHaveBeenCalledWith({
+        text:
+          "Hello! How can I help you?",
+        lang: "en-IN",
+        rate: 1.0,
+        pitch: 1.0,
+        volume: 1.0,
+      });
+    }
+  );
+
+
+  // ==========================================================
+  // GOOGLE
+  // ==========================================================
+
+  it(
+    "opens Google search for google_search command",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "google_search",
+        userInput: "React tutorials",
+        response: "Searching Google",
+      });
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript:
+                  "Radha search React tutorials",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        window.open
+      ).toHaveBeenCalledWith(
+        "https://www.google.com/search?q=React%20tutorials",
+        "_blank"
+      );
+    }
+  );
+
+
+  // ==========================================================
+  // YOUTUBE
+  // ==========================================================
+
+  it(
+    "opens YouTube search for youtube_search command",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "youtube_search",
+        userInput:
+          "JavaScript tutorial",
+        response:
+          "Searching YouTube",
+      });
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript:
+                  "Radha search JavaScript tutorial on YouTube",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        window.open
+      ).toHaveBeenCalledWith(
+        "https://www.youtube.com/results?search_query=JavaScript%20tutorial",
+        "_blank"
+      );
+    }
+  );
+
+
+  // ==========================================================
+  // CALCULATOR
+  // ==========================================================
+
+  it(
+    "opens calculator for calculator command",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "calculator_open",
+        userInput: "calculator",
+        response:
+          "Opening calculator",
+      });
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript:
+                  "Radha open calculator",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        window.open
+      ).toHaveBeenCalledWith(
+        "https://www.online-calculator.com/",
+        "_blank"
+      );
+    }
+  );
+
+
+  // ==========================================================
+  // INSTAGRAM
+  // ==========================================================
+
+  it(
+    "opens Instagram for instagram_open command",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "instagram_open",
+        userInput: "Instagram",
+        response:
+          "Opening Instagram",
+      });
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript:
+                  "Radha open Instagram",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        window.open
+      ).toHaveBeenCalledWith(
+        "https://www.instagram.com/",
+        "_blank"
+      );
+    }
+  );
+
+
+  // ==========================================================
+  // FACEBOOK
+  // ==========================================================
+
+  it(
+    "opens Facebook for facebook_open command",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "facebook_open",
+        userInput: "Facebook",
+        response:
+          "Opening Facebook",
+      });
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript:
+                  "Radha open Facebook",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        window.open
+      ).toHaveBeenCalledWith(
+        "https://www.facebook.com/",
+        "_blank"
+      );
+    }
+  );
+
+
+  // ==========================================================
+  // WEATHER
+  // ==========================================================
+
+  it(
+    "opens weather website for weather command",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "weather-show",
+        userInput: "weather",
+        response:
+          "Opening weather",
+      });
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript:
+                  "Radha show weather",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        window.open
+      ).toHaveBeenCalledWith(
+        "https://www.weather.com/",
+        "_blank"
+      );
+    }
+  );
+
+
+  // ==========================================================
+  // AI RESPONSE TTS
+  // ==========================================================
+
+  it(
+    "speaks AI response using TextToSpeech",
+    async () => {
+      contextValue.getGeminiResponse.mockResolvedValueOnce({
+        type: "normal",
+        userInput: "Radha hello",
+        response:
+          "Hello from your assistant",
+      });
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript: "Radha hello",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        mockTextToSpeech.speak
+      ).toHaveBeenCalledWith({
+        text:
+          "Hello from your assistant",
+        lang: "en-IN",
+        rate: 1.0,
+        pitch: 1.0,
+        volume: 1.0,
+      });
+    }
+  );
+
+
+  // ==========================================================
+  // GEMINI ERROR
+  // ==========================================================
+
+  it(
+    "handles Gemini API error",
+    async () => {
+      contextValue.getGeminiResponse.mockRejectedValueOnce(
+        new Error("Gemini API error")
+      );
+
+      const consoleSpy = vi
+        .spyOn(console, "log")
+        .mockImplementation(() => {});
+
+      renderHome();
+
+      await act(async () => {
+        await recognitionInstance.onresult({
+          results: [
+            [
+              {
+                transcript: "Radha hello",
+              },
+            ],
+          ],
+        });
+      });
+
+      expect(
+        contextValue.getGeminiResponse
+      ).toHaveBeenCalledWith(
+        "Radha hello"
+      );
+
+      consoleSpy.mockRestore();
+    }
+  );
+
+
+  // ==========================================================
+  // UNSUPPORTED BROWSER
+  // ==========================================================
+
+  it(
+    "handles unsupported speech recognition",
+    () => {
+      window.SpeechRecognition = undefined;
+      window.webkitSpeechRecognition =
+        undefined;
+
+      renderHome();
+
+      expect(
+        recognitionInstance
+      ).toBeNull();
+    }
+  );
+
+
+  // ==========================================================
+  // LISTENING STATE
+  // ==========================================================
+
+  it(
+    "shows Listening indicator when recognition starts",
+    async () => {
+      renderHome();
+
+      expect(
+        recognitionInstance
+      ).not.toBeNull();
+
+      await act(async () => {
+        recognitionInstance.onstart();
+      });
+
+      expect(
+        screen.getByText("Listening...")
+      ).toBeInTheDocument();
+    }
+  );
+
+  // ==========================================================
+  // MOBILE MENU CLOSE
+  // ==========================================================
+
+  it("closes mobile menu when close button is clicked", () => {
+    renderHome();
+
+    const menuButton = document.querySelector(".lg\\:hidden");
+    fireEvent.click(menuButton);
+
+    const mobileMenu = screen.getByRole("dialog", { name: /mobile menu/i });
+    expect(mobileMenu).toBeInTheDocument();
+
+    const closeButton = document.querySelector(".fixed svg.cursor-pointer");
+    fireEvent.click(closeButton);
+
+    expect(
+      screen.queryByRole("dialog", { name: /mobile menu/i })
+    ).not.toBeInTheDocument();
   });
 
-  function renderGemini(data) {
-    getGeminiResponse.mockResolvedValue(data);
+  // ==========================================================
+  // YOUTUBE PLAY COMMAND
+  // ==========================================================
 
-    render(
-      <userDataContext.Provider
-        value={{
-          serverUrl: "/api",
-          userData: {
-            assistantName: "Jarvis",
-            assistantImage: "assistant.png",
-          },
-          setUserData: vi.fn(),
-          getGeminiResponse,
-        }}
-      >
-        <MemoryRouter>
-          <Home />
-        </MemoryRouter>
-      </userDataContext.Provider>,
-    );
-  }
-
-  it("handles google search", async () => {
-    renderGemini({
-      type: "google_search",
-      userInput: "React",
-      response: "Searching Google",
-    });
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis React",
-          },
-        ],
-      ],
-    });
-
-    expect(window.open).toHaveBeenCalledWith(
-      "https://www.google.com/search?q=React",
-      "_blank",
-    );
-  });
-
-  it("handles youtube search", async () => {
-    renderGemini({
-      type: "youtube_search",
-      userInput: "Music",
-      response: "Searching YouTube",
-    });
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis Music",
-          },
-        ],
-      ],
-    });
-
-    expect(window.open).toHaveBeenCalled();
-  });
-
-  it("handles youtube play", async () => {
-    renderGemini({
+  it("opens YouTube search for youtube_play command", async () => {
+    contextValue.getGeminiResponse.mockResolvedValueOnce({
       type: "youtube_play",
-      userInput: "Songs",
-      response: "Playing",
+      userInput: "believer song",
+      response: "Playing song",
     });
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis Songs",
-          },
-        ],
-      ],
-    });
-
-    expect(window.open).toHaveBeenCalled();
-  });
-
-  it("opens calculator", async () => {
-    renderGemini({
-      type: "calculator_open",
-      userInput: "",
-      response: "Opening Calculator",
-    });
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis calculator",
-          },
-        ],
-      ],
-    });
-
-    expect(window.open).toHaveBeenCalledWith(
-      "https://www.online-calculator.com/",
-      "_blank",
-    );
-  });
-
-  it("opens instagram", async () => {
-    renderGemini({
-      type: "instagram_open",
-      userInput: "",
-      response: "Opening Instagram",
-    });
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis instagram",
-          },
-        ],
-      ],
-    });
-
-    expect(window.open).toHaveBeenCalledWith(
-      "https://www.instagram.com/",
-      "_blank",
-    );
-  });
-
-  it("opens facebook", async () => {
-    renderGemini({
-      type: "facebook_open",
-      userInput: "",
-      response: "Opening Facebook",
-    });
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis facebook",
-          },
-        ],
-      ],
-    });
-
-    expect(window.open).toHaveBeenCalledWith(
-      "https://www.facebook.com/",
-      "_blank",
-    );
-  });
-
-  it("opens weather", async () => {
-    renderGemini({
-      type: "weather-show",
-      userInput: "",
-      response: "Opening Weather",
-    });
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis weather",
-          },
-        ],
-      ],
-    });
-
-    expect(window.open).toHaveBeenCalledWith(
-      "https://www.weather.com/",
-      "_blank",
-    );
-  });
-});
-describe("Home Component - Remaining Branches", () => {
-  let recognition;
-  let getGeminiResponse;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    recognition = {
-      start: vi.fn(),
-      stop: vi.fn(),
-      onstart: null,
-      onend: null,
-      onerror: null,
-      onresult: null,
-      continuous: false,
-      lang: "",
-      interimResults: false,
-    };
-
-    class MockRecognition {
-      constructor() {
-        return recognition;
-      }
-    }
-
-    window.SpeechRecognition = MockRecognition;
-    window.webkitSpeechRecognition = MockRecognition;
-
-    window.speechSynthesis = {
-      speak: vi.fn(),
-      cancel: vi.fn(),
-      getVoices: () => [],
-      onvoiceschanged: null,
-    };
-
-    global.SpeechSynthesisUtterance = function (text) {
-      this.text = text;
-      this.onend = null;
-    };
-
-    window.open = vi.fn();
-
-    getGeminiResponse = vi.fn();
-  });
-
-  function renderHome() {
-    return render(
-      <userDataContext.Provider
-        value={{
-          serverUrl: "/api",
-          userData: {
-            assistantName: "Jarvis",
-            assistantImage: "assistant.png",
-          },
-          setUserData: vi.fn(),
-          getGeminiResponse,
-        }}
-      >
-        <MemoryRouter>
-          <Home />
-        </MemoryRouter>
-      </userDataContext.Provider>,
-    );
-  }
-
-  it("does nothing if transcript doesn't contain assistant name", async () => {
-    renderHome();
-
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Hello there",
-          },
-        ],
-      ],
-    });
-
-    expect(getGeminiResponse).not.toHaveBeenCalled();
-  });
-
-  it("handles Gemini API failure", async () => {
-    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-    getGeminiResponse.mockRejectedValue(new Error("Gemini Error"));
 
     renderHome();
 
-    await recognition.onresult({
-      results: [
-        [
-          {
-            transcript: "Jarvis tell me a joke",
-          },
-        ],
-      ],
+    await act(async () => {
+      await recognitionInstance.onresult({
+        results: [[{ transcript: "Radha play believer song" }]],
+      });
     });
 
-    expect(getGeminiResponse).toHaveBeenCalled();
-
-    expect(spy).toHaveBeenCalled();
-
-    spy.mockRestore();
+    expect(window.open).toHaveBeenCalledWith(
+      "https://www.youtube.com/results?search_query=believer%20song",
+      "_blank"
+    );
   });
 
-  it("ignores InvalidStateError while starting recognition", () => {
-    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+  // ==========================================================
+  // MISSING ASSISTANT NAME
+  // ==========================================================
 
-    recognition.start.mockImplementation(() => {
-      const error = new Error();
-      error.name = "InvalidStateError";
+  it("does not initialize speech recognition if assistantName is missing", () => {
+    const value = { ...contextValue, userData: null };
+    renderHome(value);
+
+    expect(recognitionInstance).toBeNull();
+  });
+
+  // ==========================================================
+  // SPEECH RECOGNITION START WITH DELAY ERRORS
+  // ==========================================================
+
+  it("handles InvalidStateError when starting speech recognition with delay", async () => {
+    renderHome();
+
+    const error = new Error("Already started");
+    error.name = "InvalidStateError";
+    recognitionInstance.start.mockImplementationOnce(() => {
       throw error;
     });
 
-    vi.useFakeTimers();
-
-    renderHome();
-
-    vi.advanceTimersByTime(1000);
-
-    expect(spy).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
-
-    spy.mockRestore();
-  });
-
-  it("logs unexpected recognition start errors", () => {
-    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-    recognition.start.mockImplementation(() => {
-      throw new Error("Microphone Error");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     });
 
-    vi.useFakeTimers();
+    expect(recognitionInstance.start).toHaveBeenCalled();
+  });
+
+  it("handles non-InvalidStateError when starting speech recognition with delay", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     renderHome();
 
-    vi.advanceTimersByTime(1000);
+    const error = new Error("Device busy");
+    error.name = "UnknownError";
+    recognitionInstance.start.mockImplementationOnce(() => {
+      throw error;
+    });
 
-    expect(spy).toHaveBeenCalled();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
 
-    vi.useRealTimers();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Error starting speech recognition:",
+      error
+    );
 
-    spy.mockRestore();
+    consoleSpy.mockRestore();
   });
 
-  it("cleans up when component unmounts", () => {
-    const stopSpy = recognition.stop;
+  // ==========================================================
+  // RECOGNITION ONEND RESTART
+  // ==========================================================
 
-    const clearIntervalSpy = vi.spyOn(global, "clearInterval");
+  it("restarts speech recognition on onend after delay", async () => {
+    renderHome();
+
+    await act(async () => {
+      recognitionInstance.onend();
+    });
+
+    recognitionInstance.start.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(recognitionInstance.start).toHaveBeenCalled();
+  });
+
+  it("handles InvalidStateError when restarting speech recognition on onend", async () => {
+    renderHome();
+
+    // Wait for initial startup timer to finish
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+    });
+
+    await act(async () => {
+      recognitionInstance.onend();
+    });
+
+    const error = new Error("Invalid");
+    error.name = "InvalidStateError";
+    recognitionInstance.start.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(recognitionInstance.start).toHaveBeenCalled();
+  });
+
+  it("handles non-InvalidStateError when restarting speech recognition on onend", async () => {
+    renderHome();
+
+    // Wait for initial startup timer to finish
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+    });
+
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await act(async () => {
+      recognitionInstance.onend();
+    });
+
+    const error = new Error("Generic restart error");
+    error.name = "GenericError";
+    recognitionInstance.start.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Error restarting speech recognition:",
+      error
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it("does not restart recognition on onend if assistant is speaking", async () => {
+    renderHome();
+
+    let resolveSpeak;
+    mockTextToSpeech.speak.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSpeak = resolve;
+        })
+    );
+
+    const button = screen.getByRole("button", {
+      name: /test native voice/i,
+    });
+
+    act(() => {
+      fireEvent.click(button);
+    });
+
+    recognitionInstance.start.mockClear();
+
+    act(() => {
+      recognitionInstance.onend();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(recognitionInstance.start).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSpeak();
+    });
+  });
+
+  // ==========================================================
+  // RECOGNITION ONERROR
+  // ==========================================================
+
+  it("handles not-allowed recognition error", () => {
+    renderHome();
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "not-allowed" });
+    });
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "Microphone permission is not allowed."
+    );
+    consoleWarn.mockRestore();
+  });
+
+  it("handles service-not-allowed recognition error", () => {
+    renderHome();
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "service-not-allowed" });
+    });
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "Speech recognition service is not allowed."
+    );
+    consoleWarn.mockRestore();
+  });
+
+  it("handles network recognition error", () => {
+    renderHome();
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "network" });
+    });
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "Speech recognition network error."
+    );
+    consoleWarn.mockRestore();
+  });
+
+  it("handles aborted recognition error without restarting", async () => {
+    renderHome();
+
+    // Wait for initial startup timer to finish
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+    });
+
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "aborted" });
+    });
+
+    recognitionInstance.start.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(recognitionInstance.start).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
+  });
+
+  it("restarts recognition on generic error and handles start error", async () => {
+    renderHome();
+
+    // Wait for initial startup timer to finish
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+    });
+
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "audio-capture" });
+    });
+
+    const error = new Error("Generic error");
+    error.name = "CustomError";
+    recognitionInstance.start.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Error restarting recognition:",
+      error
+    );
+
+    consoleWarn.mockRestore();
+    consoleSpy.mockRestore();
+  });
+
+  it("handles InvalidStateError when restarting recognition on generic error", async () => {
+    renderHome();
+
+    // Wait for initial startup timer to finish
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+    });
+
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "audio-capture" });
+    });
+
+    const error = new Error("Already started");
+    error.name = "InvalidStateError";
+    recognitionInstance.start.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(recognitionInstance.start).toHaveBeenCalled();
+    consoleWarn.mockRestore();
+  });
+
+  it("does not restart recognition on onerror if assistant is speaking", async () => {
+    renderHome();
+
+    let resolveSpeak;
+    mockTextToSpeech.speak.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSpeak = resolve;
+        })
+    );
+
+    const button = screen.getByRole("button", {
+      name: /test native voice/i,
+    });
+
+    act(() => {
+      fireEvent.click(button);
+    });
+
+    recognitionInstance.start.mockClear();
+
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "audio-capture" });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(recognitionInstance.start).not.toHaveBeenCalled();
+
+    consoleWarn.mockRestore();
+
+    await act(async () => {
+      resolveSpeak();
+    });
+  });
+
+  // ==========================================================
+  // GREETING TIMER
+  // ==========================================================
+
+  it("plays greeting after 1500ms delay", async () => {
+    renderHome();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    });
+
+    expect(mockTextToSpeech.speak).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining(
+          "Hello Radha. I am online now. How can I assist you today?"
+        ),
+      })
+    );
+  });
+
+  // ==========================================================
+  // UNMOUNT CLEANUP ERRORS
+  // ==========================================================
+
+  it("handles errors during component unmount cleanup", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const { unmount } = renderHome();
 
+    recognitionInstance.stop.mockImplementationOnce(() => {
+      throw new Error("Cleanup stop failed");
+    });
+
+    mockTextToSpeech.stop.mockRejectedValueOnce(
+      new Error("TTS cleanup failed")
+    );
+
     unmount();
 
-    expect(stopSpy).toHaveBeenCalled();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
 
-    expect(clearIntervalSpy).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Recognition cleanup:",
+      expect.any(Error)
+    );
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "TTS cleanup:",
+      expect.any(Error)
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  // ==========================================================
+  // TEST NATIVE VOICE ERRORS & RESTART
+  // ==========================================================
+
+  it("handles recognition stop error during testNativeVoice and restarts recognition", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    renderHome();
+
+    recognitionInstance.stop.mockImplementationOnce(() => {
+      throw new Error("Recognition stop failed");
+    });
+
+    const button = screen.getByRole("button", {
+      name: /test native voice/i,
+    });
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Recognition stop:",
+      expect.any(Error)
+    );
+
+    recognitionInstance.start.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 850));
+    });
+
+    expect(recognitionInstance.start).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("handles TextToSpeech error during testNativeVoice and restarts recognition", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    renderHome();
+
+    mockTextToSpeech.speak.mockRejectedValueOnce(
+      new Error("TTS speak error")
+    );
+
+    const button = screen.getByRole("button", {
+      name: /test native voice/i,
+    });
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(consoleError).toHaveBeenCalledWith(
+      "❌ TEST NATIVE VOICE ERROR:",
+      expect.any(Error)
+    );
+
+    recognitionInstance.start.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 850));
+    });
+
+    expect(recognitionInstance.start).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  // ==========================================================
+  // SPEAK FUNCTION BRANCHES
+  // ==========================================================
+
+  it("handles empty response in speak without calling TTS", async () => {
+    contextValue.getGeminiResponse.mockResolvedValueOnce({
+      type: "normal",
+      userInput: "Radha",
+      response: "",
+    });
+
+    renderHome();
+    mockTextToSpeech.speak.mockClear();
+
+    await act(async () => {
+      await recognitionInstance.onresult({
+        results: [[{ transcript: "Radha" }]],
+      });
+    });
+
+    expect(mockTextToSpeech.speak).not.toHaveBeenCalled();
+  });
+
+  it("handles TTS stop warning in speak and restarts recognition after speaking", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    mockTextToSpeech.stop.mockRejectedValueOnce(
+      new Error("TTS stop warning error")
+    );
+
+    contextValue.getGeminiResponse.mockResolvedValueOnce({
+      type: "normal",
+      userInput: "Radha hello",
+      response: "Hello there",
+    });
+
+    renderHome();
+
+    await act(async () => {
+      await recognitionInstance.onresult({
+        results: [[{ transcript: "Radha hello" }]],
+      });
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "TTS stop warning:",
+      expect.any(Error)
+    );
+
+    recognitionInstance.start.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 850));
+    });
+
+    expect(recognitionInstance.start).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("handles TTS error in speak and restarts recognition", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    mockTextToSpeech.speak.mockRejectedValueOnce(
+      new Error("Speak failure")
+    );
+
+    contextValue.getGeminiResponse.mockResolvedValueOnce({
+      type: "normal",
+      userInput: "Radha hello",
+      response: "Hello there",
+    });
+
+    renderHome();
+
+    await act(async () => {
+      await recognitionInstance.onresult({
+        results: [[{ transcript: "Radha hello" }]],
+      });
+    });
+
+    expect(consoleError).toHaveBeenCalledWith(
+      "❌ Native TTS error:",
+      expect.any(Error)
+    );
+
+    recognitionInstance.start.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 850));
+    });
+
+    expect(recognitionInstance.start).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("handles startRecognition start errors", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    contextValue.getGeminiResponse.mockResolvedValueOnce({
+      type: "normal",
+      userInput: "Radha hello",
+      response: "Hi",
+    });
+
+    renderHome();
+
+    await act(async () => {
+      await recognitionInstance.onresult({
+        results: [[{ transcript: "Radha hello" }]],
+      });
+    });
+
+    const error = new Error("Microphone busy");
+    error.name = "CustomError";
+    recognitionInstance.start.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 850));
+    });
+
+    expect(consoleError).toHaveBeenCalledWith(
+      "Recognition start error:",
+      error
+    );
+
+    consoleError.mockRestore();
+  });
+
+  it("ignores InvalidStateError in startRecognition", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    contextValue.getGeminiResponse.mockResolvedValueOnce({
+      type: "normal",
+      userInput: "Radha hello",
+      response: "Hi",
+    });
+
+    renderHome();
+
+    await act(async () => {
+      await recognitionInstance.onresult({
+        results: [[{ transcript: "Radha hello" }]],
+      });
+    });
+
+    const error = new Error("Invalid state");
+    error.name = "InvalidStateError";
+    recognitionInstance.start.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 850));
+    });
+
+    expect(consoleError).not.toHaveBeenCalled();
+
+    consoleError.mockRestore();
+  });
+
+  // ==========================================================
+  // TEST NATIVE VOICE WITHOUT RECOGNITION INSTANCE
+  // ==========================================================
+
+  it("runs testNativeVoice when recognitionRef.current is null", async () => {
+    const value = {
+      ...contextValue,
+      userData: {
+        ...contextValue.userData,
+        assistantName: "",
+      },
+    };
+    renderHome(value);
+
+    const button = screen.getByRole("button", {
+      name: /test native voice/i,
+    });
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(mockTextToSpeech.speak).toHaveBeenCalled();
+  });
+
+  // ==========================================================
+  // GREETING TIMER UNMOUNTED
+  // ==========================================================
+
+  it("does not speak greeting if unmounted and timer fires", async () => {
+    const clearTimeoutSpy = vi
+      .spyOn(window, "clearTimeout")
+      .mockImplementation(() => {});
+
+    const { unmount } = renderHome();
+
+    mockTextToSpeech.speak.mockClear();
+
+    unmount();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1550));
+    });
+
+    expect(mockTextToSpeech.speak).not.toHaveBeenCalled();
+
+    clearTimeoutSpy.mockRestore();
+  });
+
+  // ==========================================================
+  // ONERROR TIMEOUT WHEN ALREADY RECOGNIZING
+  // ==========================================================
+
+  it("does not restart recognition in onerror timeout if recognition is already running", async () => {
+    renderHome();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1050));
+    });
+
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    act(() => {
+      recognitionInstance.onerror({ error: "audio-capture" });
+    });
+
+    // Simulate recognition already running before the 1000ms timeout fires
+    act(() => {
+      recognitionInstance.onstart();
+    });
+
+    recognitionInstance.start.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+
+    expect(recognitionInstance.start).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
   });
 });

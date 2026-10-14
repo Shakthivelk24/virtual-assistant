@@ -169,9 +169,7 @@ function Home() {
     } = data;
 
     // Speak AI response
-    if (response) {
-      speak(response);
-    }
+    speak(response);
 
     // Google search
     if (type === "google_search") {
@@ -681,7 +679,11 @@ function Home() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-50 flex flex-col items-center justify-center gap-4">
+        <div
+          role="dialog"
+          aria-label="Mobile Menu"
+          className="fixed inset-0 bg-black/40 backdrop-blur-md z-50 flex flex-col items-center justify-center gap-4"
+        >
 
           <IoMdCloseCircle
             onClick={() =>

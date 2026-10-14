@@ -24,7 +24,8 @@ export default defineConfig({
 
       exclude: [
         ...coverageConfigDefaults.exclude,
-        'src/main.jsx'
+        'src/main.jsx',
+        'src/assets/**'
       ]
     }
   }

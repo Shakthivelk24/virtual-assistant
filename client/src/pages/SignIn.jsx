@@ -65,6 +65,9 @@ function SignIn() {
       );
 
       // Store actual user data
+      if (!user?.data) {
+        throw new Error("User data was not received from the server");
+      }
       setUserData(user.data);
 
       toast.success("Signed In Successfully");
@@ -81,8 +84,8 @@ function SignIn() {
       setUserData(null);
 
       const errorMessage =
-        err.response?.data?.message ||
-        err.message ||
+        err?.response?.data?.message ||
+        err?.message ||
         "An error occurred during sign in";
 
       setError(errorMessage);

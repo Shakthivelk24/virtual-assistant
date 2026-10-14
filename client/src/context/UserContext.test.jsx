@@ -1,220 +1,536 @@
-// UserContext.test.jsx
-
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import axios from "axios";
 import React, { useContext } from "react";
-import UserContext, { userDataContext } from "../context/UserContext";
 
-vi.mock("axios");
+import {
+  render,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 
-vi.mock("../components/Loading.jsx", () => ({
-  default: () => <div>Loading...</div>,
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
+
+import UserContext, {
+  userDataContext,
+} from "./UserContext.jsx";
+
+import axios from "axios";
+
+
+// ============================================================
+// AXIOS MOCK
+// ============================================================
+
+vi.mock("axios", () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+  },
 }));
+
+
+// ============================================================
+// TEST COMPONENT
+// ============================================================
 
 function TestComponent() {
   const context = useContext(userDataContext);
 
   return (
-    <>
-      <div data-testid="server-url">{context.serverUrl}</div>
+    <div>
+      <span data-testid="server-url">
+        {context.serverUrl}
+      </span>
 
-      <div data-testid="loading">
+      <span data-testid="loading">
         {context.loading ? "true" : "false"}
-      </div>
+      </span>
 
-      <div data-testid="username">
-        {context.userData?.name || "No User"}
-      </div>
-
-      <button
-        onClick={() => context.getGeminiResponse("Hello")}
-      >
-        Ask Gemini
-      </button>
-    </>
+      <span data-testid="user">
+        {context.userData
+          ? context.userData.name
+          : "No User"}
+      </span>
+    </div>
   );
 }
 
-describe("UserContext", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+
+// ============================================================
+// RENDER HELPER
+// ============================================================
+
+const renderContext = () => {
+  return render(
+    <UserContext>
+      <TestComponent />
+    </UserContext>
+  );
+};
+
+
+// ============================================================
+// BEFORE EACH
+// ============================================================
+
+beforeEach(() => {
+  vi.clearAllMocks();
+
+  axios.get.mockResolvedValue({
+    data: {
+      _id: "user123",
+      name: "Shakthi",
+      email: "shakthi@example.com",
+      assistantName: "Radha",
+    },
   });
 
-  it("renders children", async () => {
-    axios.get.mockResolvedValue({
-      data: {
-        name: "Shakthi",
-      },
-    });
+  axios.post.mockReset();
 
-    render(
-      <UserContext>
-        <TestComponent />
-      </UserContext>
-    );
+  localStorage.clear();
+});
+
+
+// ============================================================
+// AFTER EACH
+// ============================================================
+
+afterEach(() => {
+  cleanup();
+
+  localStorage.clear();
+
+  vi.restoreAllMocks();
+});
+
+
+// ============================================================
+// USER CONTEXT TESTS
+// ============================================================
+
+describe("UserContext", () => {
+
+  // ==========================================================
+  // SERVER URL
+  // ==========================================================
+
+  it("provides server URL", () => {
+    renderContext();
 
     expect(
-      screen.getByTestId("server-url")
+      document.querySelector(
+        '[data-testid="server-url"]'
+      )
     ).toHaveTextContent("/api");
   });
 
-  it("fetches current user successfully", async () => {
-    axios.get.mockResolvedValue({
-      data: {
-        name: "Shakthi",
-      },
-    });
 
-    render(
-      <UserContext>
-        <TestComponent />
-      </UserContext>
-    );
+  // ==========================================================
+  // INITIAL USER REQUEST
+  // ==========================================================
+
+  it("gets current user when context loads", async () => {
+    renderContext();
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        "/api/user/current",
+        {
+          withCredentials: true,
+        }
+      );
+    });
+  });
+
+
+  // ==========================================================
+  // SET USER DATA
+  // ==========================================================
+
+  it("stores current user data", async () => {
+    renderContext();
 
     await waitFor(() => {
       expect(
-        screen.getByTestId("username")
+        document.querySelector(
+          '[data-testid="user"]'
+        )
       ).toHaveTextContent("Shakthi");
     });
-
-    expect(axios.get).toHaveBeenCalledWith(
-      "/api/user/current",
-      {
-        withCredentials: true,
-      }
-    );
   });
 
-  it("sets userData to null on 401", async () => {
-    axios.get.mockRejectedValue({
-      response: {
-        status: 401,
-      },
-    });
 
-    render(
-      <UserContext>
-        <TestComponent />
-      </UserContext>
+  // ==========================================================
+  // AUTH TOKEN
+  // ==========================================================
+
+  it("sends JWT token when token exists", async () => {
+    localStorage.setItem(
+      "token",
+      "test-jwt-token"
     );
+
+    renderContext();
+
+    await waitFor(() => {
+      expect(axios.get).toHaveBeenCalledWith(
+        "/api/user/current",
+        {
+          withCredentials: true,
+          headers: {
+            Authorization:
+              "Bearer test-jwt-token",
+          },
+        }
+      );
+    });
+  });
+
+
+  // ==========================================================
+  // LOADING STATE
+  // ==========================================================
+
+  it("sets loading to false after user request completes", async () => {
+    renderContext();
 
     await waitFor(() => {
       expect(
-        screen.getByTestId("username")
-      ).toHaveTextContent("No User");
-    });
-  });
-
-  it("handles server error gracefully", async () => {
-    const spy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-
-    axios.get.mockRejectedValue(new Error("Server Error"));
-
-    render(
-      <UserContext>
-        <TestComponent />
-      </UserContext>
-    );
-
-    await waitFor(() => {
-      expect(spy).toHaveBeenCalled();
-    });
-
-    spy.mockRestore();
-  });
-
-  it("loading becomes false after API call", async () => {
-    axios.get.mockResolvedValue({
-      data: {
-        name: "Shakthi",
-      },
-    });
-
-    render(
-      <UserContext>
-        <TestComponent />
-      </UserContext>
-    );
-
-    await waitFor(() => {
-      expect(
-        screen.getByTestId("loading")
+        document.querySelector(
+          '[data-testid="loading"]'
+        )
       ).toHaveTextContent("false");
     });
   });
 
-  it("getGeminiResponse returns response", async () => {
-    axios.get.mockResolvedValue({
-      data: {},
-    });
 
-    axios.post.mockResolvedValue({
-      data: {
-        answer: "Hello User",
+  // ==========================================================
+  // 401 ERROR
+  // ==========================================================
+
+  it("removes token when current user returns 401", async () => {
+    localStorage.setItem(
+      "token",
+      "expired-token"
+    );
+
+    axios.get.mockRejectedValueOnce({
+      response: {
+        status: 401,
+        data: {
+          message: "Unauthorized",
+        },
       },
     });
 
-    let context;
+    renderContext();
 
-    function Wrapper() {
-      context = useContext(userDataContext);
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          '[data-testid="user"]'
+        )
+      ).toHaveTextContent("No User");
+    });
+
+    expect(
+      localStorage.getItem("token")
+    ).toBeNull();
+  });
+
+
+  // ==========================================================
+  // NON-401 ERROR
+  // ==========================================================
+
+  it("handles non-401 current user error", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    axios.get.mockRejectedValueOnce({
+      response: {
+        status: 500,
+        data: {
+          message: "Server Error",
+        },
+      },
+    });
+
+    renderContext();
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          '[data-testid="loading"]'
+        )
+      ).toHaveTextContent("false");
+    });
+
+    expect(
+      consoleError
+    ).toHaveBeenCalled();
+
+    consoleError.mockRestore();
+  });
+
+
+  // ==========================================================
+  // GEMINI SUCCESS
+  // ==========================================================
+
+  it("gets Gemini response successfully", async () => {
+    axios.post.mockResolvedValueOnce({
+      data: {
+        response: "Hello Shakthi",
+      },
+    });
+
+    function GeminiTest() {
+      const { getGeminiResponse } =
+        useContext(userDataContext);
+
+      React.useEffect(() => {
+        getGeminiResponse("Hello")
+          .then((data) => {
+            window.__geminiResult = data;
+          });
+      }, []);
+
       return null;
     }
 
     render(
       <UserContext>
-        <Wrapper />
+        <GeminiTest />
       </UserContext>
     );
 
-    const result = await context.getGeminiResponse("Hello");
-
-    expect(result).toEqual({
-      answer: "Hello User",
+    await waitFor(() => {
+      expect(axios.post).toHaveBeenCalledWith(
+        "/api/user/ask",
+        {
+          command: "Hello",
+        },
+        {
+          withCredentials: true,
+        }
+      );
     });
+
+    await waitFor(() => {
+      expect(window.__geminiResult).toEqual({
+        response: "Hello Shakthi",
+      });
+    });
+
+    delete window.__geminiResult;
+  });
+
+
+  // ==========================================================
+  // GEMINI WITH TOKEN
+  // ==========================================================
+
+  it("sends JWT token with Gemini request", async () => {
+    localStorage.setItem(
+      "token",
+      "gemini-token"
+    );
+
+    axios.post.mockResolvedValueOnce({
+      data: {
+        response: "Authenticated response",
+      },
+    });
+
+    function GeminiTest() {
+      const { getGeminiResponse } =
+        useContext(userDataContext);
+
+      React.useEffect(() => {
+        getGeminiResponse("Hello");
+      }, []);
+
+      return null;
+    }
+
+    render(
+      <UserContext>
+        <GeminiTest />
+      </UserContext>
+    );
+
+    await waitFor(() => {
+      expect(axios.post).toHaveBeenCalledWith(
+        "/api/user/ask",
+        {
+          command: "Hello",
+        },
+        {
+          withCredentials: true,
+          headers: {
+            Authorization:
+              "Bearer gemini-token",
+          },
+        }
+      );
+    });
+  });
+
+
+  // ==========================================================
+  // GEMINI ERROR
+  // ==========================================================
+
+  it("throws error when Gemini request fails", async () => {
+    const error = new Error(
+      "Gemini API failed"
+    );
+
+    axios.post.mockRejectedValueOnce(error);
+
+    let getGeminiResponseFn;
+
+    function GeminiErrorTest() {
+      const { getGeminiResponse } =
+        useContext(userDataContext);
+
+      getGeminiResponseFn = getGeminiResponse;
+
+      return null;
+    }
+
+    render(
+      <UserContext>
+        <GeminiErrorTest />
+      </UserContext>
+    );
+
+    await expect(
+      getGeminiResponseFn("hello")
+    ).rejects.toThrow(
+      "Gemini API failed"
+    );
 
     expect(axios.post).toHaveBeenCalledWith(
       "/api/user/ask",
-      { command: "Hello" },
-      { withCredentials: true }
+      {
+        command: "hello",
+      },
+      expect.any(Object)
     );
   });
 
-  it("returns undefined when Gemini request fails", async () => {
-    axios.get.mockResolvedValue({
-      data: {},
+
+  // ==========================================================
+  // GEMINI REQUEST COMMAND
+  // ==========================================================
+
+  it("sends prompt as command", async () => {
+    axios.post.mockResolvedValueOnce({
+      data: {
+        response: "Test response",
+      },
     });
 
-    axios.post.mockRejectedValue(
-      new Error("API Error")
-    );
+    function GeminiTest() {
+      const { getGeminiResponse } =
+        useContext(userDataContext);
 
-    const spy = vi
-      .spyOn(console, "log")
-      .mockImplementation(() => {});
+      React.useEffect(() => {
+        getGeminiResponse(
+          "What is the weather?"
+        );
+      }, []);
 
-    let context;
-
-    function Wrapper() {
-      context = useContext(userDataContext);
       return null;
     }
 
     render(
       <UserContext>
-        <Wrapper />
+        <GeminiTest />
       </UserContext>
     );
 
-    const result = await context.getGeminiResponse("Hello");
+    await waitFor(() => {
+      expect(axios.post).toHaveBeenCalledWith(
+        "/api/user/ask",
+        {
+          command: "What is the weather?",
+        },
+        {
+          withCredentials: true,
+        }
+      );
+    });
+  });
 
-    expect(result).toBeUndefined();
 
-    expect(spy).toHaveBeenCalled();
+  // ==========================================================
+  // CURRENT USER ERROR DOES NOT THROW
+  // ==========================================================
 
-    spy.mockRestore();
+  it("does not throw current user request error", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    axios.get.mockRejectedValueOnce(
+      new Error("Current user failed")
+    );
+
+    renderContext();
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          '[data-testid="loading"]'
+        )
+      ).toHaveTextContent("false");
+    });
+
+    expect(
+      consoleError
+    ).toHaveBeenCalled();
+
+    consoleError.mockRestore();
+  });
+
+  // ==========================================================
+  // CUSTOM BACKEND URL
+  // ==========================================================
+
+  it("uses custom VITE_BACKEND_URL when provided", () => {
+    vi.stubEnv("VITE_BACKEND_URL", "https://api.example.com");
+
+    renderContext();
+
+    expect(
+      document.querySelector(
+        '[data-testid="server-url"]'
+      )
+    ).toHaveTextContent("https://api.example.com");
+
+    vi.unstubAllEnvs();
+  });
+
+  it("falls back to /api when VITE_BACKEND_URL is empty", () => {
+    vi.stubEnv("VITE_BACKEND_URL", "");
+
+    renderContext();
+
+    expect(
+      document.querySelector(
+        '[data-testid="server-url"]'
+      )
+    ).toHaveTextContent("/api");
+
+    vi.unstubAllEnvs();
   });
 });

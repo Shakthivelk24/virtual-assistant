@@ -23,18 +23,11 @@ function UserContext({ children }) {
   const getAuthConfig = () => {
     const token = localStorage.getItem("token");
 
-    console.log("TOKEN EXISTS:", !!token);
-
     if (!token) {
       return {
         withCredentials: true,
       };
     }
-
-    console.log(
-      "TOKEN PREVIEW:",
-      token.substring(0, 20) + "..."
-    );
 
     return {
       withCredentials: true,
