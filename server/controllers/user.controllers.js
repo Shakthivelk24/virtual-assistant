@@ -91,17 +91,26 @@ export const askToAssistant = async (req, res) => {
     let jsonResponse;
 
     if (typeof result === "string") {
-      const trimmedResult = result.trim();
+      let cleanedResult = result.trim();
 
       try {
         // First, parse the complete response as JSON
-        jsonResponse = JSON.parse(trimmedResult);
+        jsonResponse = JSON.parse(cleanedResult);
       } catch {
-        // Remove optional Markdown code fences
-        const cleanedResult = trimmedResult
-          .replace(/^```(?:json)?[ \t]*\r?\n?/i, "")
-          .replace(/\r?\n?[ \t]*```$/, "")
-          .trim();
+        // Remove optional Markdown code fences without regex
+        if (cleanedResult.startsWith("```")) {
+          const firstNewline = cleanedResult.indexOf("\n");
+
+          if (firstNewline !== -1) {
+            cleanedResult = cleanedResult.slice(firstNewline + 1);
+          }
+        }
+
+        cleanedResult = cleanedResult.trim();
+
+        if (cleanedResult.endsWith("```")) {
+          cleanedResult = cleanedResult.slice(0, -3).trimEnd();
+        }
 
         try {
           jsonResponse = JSON.parse(cleanedResult);
