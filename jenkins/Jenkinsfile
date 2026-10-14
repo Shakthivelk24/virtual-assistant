@@ -364,25 +364,22 @@ pipeline {
                         sh '''
                     set -e
 
-                    echo "Checking existing backend container..."
-                    docker ps -a --filter "name=^/backend$"
+                    echo "Removing conflicting containers..."
+                    docker rm -f backend frontend 2>/dev/null || true
 
-                    echo "Removing conflicting backend container if it exists..."
-                    docker rm -f backend 2>/dev/null || true
-
-                    echo "Deploying application..."
+                    echo "Building and deploying frontend and backend..."
                     docker compose up -d --build --remove-orphans
 
-                    echo "Checking deployment status..."
+                    echo "Deployment status:"
                     docker compose ps
                 '''
             } else {
                         bat '''
                     @echo off
-                    docker rm -f backend
+                    docker rm -f backend frontend 2>nul
                     docker compose up -d --build --remove-orphans
-                    docker compose ps
                     if errorlevel 1 exit /b 1
+                    docker compose ps
                 '''
                     }
                 }
