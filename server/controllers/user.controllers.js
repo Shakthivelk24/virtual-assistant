@@ -87,21 +87,52 @@ export const askToAssistant = async (req, res) => {
 
     console.log("Gemini Response:", result);
 
-    // If geminiResponse() already returns an object
+    // Parse Gemini response safely
     let jsonResponse;
 
     if (typeof result === "string") {
-      const jsonMatch = result.match(/{[\s\S]*}/);
+      const trimmedResult = result.trim();
 
-      if (!jsonMatch) {
-        return res.status(500).json({
-          message: "Invalid JSON received from Gemini",
-        });
+      try {
+        // First, parse the complete response as JSON
+        jsonResponse = JSON.parse(trimmedResult);
+      } catch {
+        // Remove optional Markdown code fences
+        const cleanedResult = trimmedResult
+          .replace(/^```(?:json)?[ \t]*\r?\n?/i, "")
+          .replace(/\r?\n?[ \t]*```$/, "")
+          .trim();
+
+        try {
+          jsonResponse = JSON.parse(cleanedResult);
+        } catch {
+          return res.status(500).json({
+            message: "Invalid JSON received from Gemini",
+          });
+        }
       }
-
-      jsonResponse = JSON.parse(jsonMatch[0]);
-    } else {
+    } else if (
+      result !== null &&
+      typeof result === "object" &&
+      !Array.isArray(result)
+    ) {
+      // Gemini helper already returned an object
       jsonResponse = result;
+    } else {
+      return res.status(500).json({
+        message: "Invalid response received from Gemini",
+      });
+    }
+
+    // Validate the parsed response
+    if (
+      jsonResponse === null ||
+      typeof jsonResponse !== "object" ||
+      Array.isArray(jsonResponse)
+    ) {
+      return res.status(500).json({
+        message: "Invalid JSON object received from Gemini",
+      });
     }
 
     // Handle dynamic values
