@@ -61,12 +61,79 @@ export const updateAssistant = async (req, res) => {
   }
 };
 // Ask to Assistant Controller
+const parseGeminiResponse = (result) => {
+  let jsonResponse;
+
+  if (typeof result !== "string") {
+    if (
+      result === null ||
+      typeof result !== "object" ||
+      Array.isArray(result)
+    ) {
+      throw new Error("Invalid response received from Gemini");
+    }
+
+    return result;
+  }
+
+  let cleanedResult = result.trim();
+
+  try {
+    jsonResponse = JSON.parse(cleanedResult);
+  } catch {
+    if (cleanedResult.startsWith("```")) {
+      const firstNewline = cleanedResult.indexOf("\n");
+
+      if (firstNewline !== -1) {
+        cleanedResult = cleanedResult.slice(firstNewline + 1);
+      }
+    }
+
+    cleanedResult = cleanedResult.trim();
+
+    if (cleanedResult.endsWith("```")) {
+      cleanedResult = cleanedResult.slice(0, -3).trimEnd();
+    }
+
+    try {
+      jsonResponse = JSON.parse(cleanedResult);
+    } catch {
+      throw new Error("Invalid JSON received from Gemini");
+    }
+  }
+
+  if (
+    jsonResponse === null ||
+    typeof jsonResponse !== "object" ||
+    Array.isArray(jsonResponse)
+  ) {
+    throw new Error("Invalid JSON object received from Gemini");
+  }
+
+  return jsonResponse;
+};
+
+const updateDynamicResponse = (jsonResponse) => {
+  const responseFormatters = {
+    get_date: () => `Today is ${moment().format("MMMM Do YYYY")}`,
+    get_time: () => `The current time is ${moment().format("h:mm A")}`,
+    get_day: () => `Today is ${moment().format("dddd")}`,
+    get_month: () => `This month is ${moment().format("MMMM")}`,
+  };
+
+  const formatter = responseFormatters[jsonResponse.type];
+
+  if (formatter) {
+    jsonResponse.response = formatter();
+  }
+
+  return jsonResponse;
+};
 export const askToAssistant = async (req, res) => {
   try {
     assistantRequestsQuery();
     const { command } = req.body;
 
-    // Find user
     const user = await User.findById(req.userId);
 
     if (!user) {
@@ -75,103 +142,34 @@ export const askToAssistant = async (req, res) => {
       });
     }
 
-    // Save command history
     user.history.push(command);
     await user.save();
 
-    const userName = user.name;
-    const assistantName = user.assistantName;
-
-    // Get Gemini response
-    const result = await geminiResonse(command, assistantName, userName);
+    const result = await geminiResonse(
+      command,
+      user.assistantName,
+      user.name,
+    );
 
     console.log("Gemini Response:", result);
 
-    // Parse Gemini response safely
-    let jsonResponse;
-
-    if (typeof result === "string") {
-      let cleanedResult = result.trim();
-
-      try {
-        // First, parse the complete response as JSON
-        jsonResponse = JSON.parse(cleanedResult);
-      } catch {
-        // Remove optional Markdown code fences without regex
-        if (cleanedResult.startsWith("```")) {
-          const firstNewline = cleanedResult.indexOf("\n");
-
-          if (firstNewline !== -1) {
-            cleanedResult = cleanedResult.slice(firstNewline + 1);
-          }
-        }
-
-        cleanedResult = cleanedResult.trim();
-
-        if (cleanedResult.endsWith("```")) {
-          cleanedResult = cleanedResult.slice(0, -3).trimEnd();
-        }
-
-        try {
-          jsonResponse = JSON.parse(cleanedResult);
-        } catch {
-          return res.status(500).json({
-            message: "Invalid JSON received from Gemini",
-          });
-        }
-      }
-    } else if (
-      result !== null &&
-      typeof result === "object" &&
-      !Array.isArray(result)
-    ) {
-      // Gemini helper already returned an object
-      jsonResponse = result;
-    } else {
-      return res.status(500).json({
-        message: "Invalid response received from Gemini",
-      });
-    }
-
-    // Validate the parsed response
-    if (
-      jsonResponse === null ||
-      typeof jsonResponse !== "object" ||
-      Array.isArray(jsonResponse)
-    ) {
-      return res.status(500).json({
-        message: "Invalid JSON object received from Gemini",
-      });
-    }
-
-    // Handle dynamic values
-    switch (jsonResponse.type) {
-      case "get_date":
-        jsonResponse.response = `Today is ${moment().format("MMMM Do YYYY")}`;
-        break;
-
-      case "get_time":
-        jsonResponse.response = `The current time is ${moment().format(
-          "h:mm A",
-        )}`;
-        break;
-
-      case "get_day":
-        jsonResponse.response = `Today is ${moment().format("dddd")}`;
-        break;
-
-      case "get_month":
-        jsonResponse.response = `This month is ${moment().format("MMMM")}`;
-        break;
-
-      default:
-        // Leave response unchanged
-        break;
-    }
+    const jsonResponse = updateDynamicResponse(
+      parseGeminiResponse(result),
+    );
 
     return res.status(200).json(jsonResponse);
   } catch (error) {
     console.error("Ask Assistant Error:", error);
+
+    if (
+      error.message === "Invalid JSON received from Gemini" ||
+      error.message === "Invalid JSON object received from Gemini" ||
+      error.message === "Invalid response received from Gemini"
+    ) {
+      return res.status(500).json({
+        message: error.message,
+      });
+    }
 
     return res.status(500).json({
       message: "Server Error",
